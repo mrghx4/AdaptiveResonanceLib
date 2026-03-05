@@ -52,10 +52,29 @@ std::vector<int> FuzzyARTCore::predict(const MatrixView& x) const {
 }
 
 void FuzzyARTCore::set_weights(const std::vector<std::vector<double>>& weights) {
-    weights_ = weights;
-    if (!weights_.empty()) {
-        dim_original_ = weights_.front().size() / 2;
+    if (weights.empty()) {
+        weights_.clear();
+        dim_original_ = 0;
+        return;
     }
+
+    const std::size_t expected_len = weights.front().size();
+    if (expected_len == 0 || (expected_len % 2) != 0) {
+        throw std::invalid_argument("Weights must be non-empty complement-coded vectors");
+    }
+
+    for (const auto& w : weights) {
+        if (w.size() != expected_len) {
+            throw std::invalid_argument("All weight vectors must have the same dimensionality");
+        }
+    }
+
+    if (dim_original_ != 0 && expected_len != 2 * dim_original_) {
+        throw std::invalid_argument("Weight dimensionality mismatch with model state");
+    }
+
+    weights_ = weights;
+    dim_original_ = expected_len / 2;
 }
 
 const std::vector<std::vector<double>>& FuzzyARTCore::weights() const {
@@ -143,6 +162,16 @@ void FuzzyARTCore::validate_matrix(const MatrixView& x) const {
     }
     if (x.cols == 0 || (x.cols % 2) != 0) {
         throw std::invalid_argument("Input must be complement-coded with even feature size");
+    }
+    if (dim_original_ != 0 && x.cols != 2 * dim_original_) {
+        throw std::invalid_argument(
+            "Input dimensionality mismatch with existing model weights/state"
+        );
+    }
+    if (!weights_.empty() && x.cols != weights_.front().size()) {
+        throw std::invalid_argument(
+            "Input dimensionality mismatch with existing model weights"
+        );
     }
 }
 
