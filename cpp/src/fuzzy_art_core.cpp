@@ -51,6 +51,13 @@ std::vector<int> FuzzyARTCore::predict(const MatrixView& x) const {
     return out;
 }
 
+void FuzzyARTCore::set_weights(const std::vector<std::vector<double>>& weights) {
+    weights_ = weights;
+    if (!weights_.empty()) {
+        dim_original_ = weights_.front().size() / 2;
+    }
+}
+
 const std::vector<std::vector<double>>& FuzzyARTCore::weights() const {
     return weights_;
 }

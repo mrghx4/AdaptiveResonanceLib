@@ -7,6 +7,8 @@ from setuptools import setup, Extension, find_packages
 extra_compile_args = ["/std:c++17"] if sys.platform == "win32" else ["-std=c++17"]
 
 cpp_dir = os.path.join("artlib", "optimized", "backends", "cpp")
+cpp_workspace_include = os.path.join("cpp", "include")
+cpp_workspace_src = os.path.join("cpp", "src")
 
 ext_modules = [
     Extension(
@@ -53,8 +55,11 @@ ext_modules = [
     ),
     Extension(
         "artlib.optimized.backends.cpp.cppFuzzyART",
-        [os.path.join(cpp_dir, "cppFuzzyART.cpp")],
-        include_dirs=[pybind11.get_include(), cpp_dir],
+        [
+            os.path.join(cpp_dir, "cppFuzzyART.cpp"),
+            os.path.join(cpp_workspace_src, "fuzzy_art_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_dir, cpp_workspace_include],
         language="c++",
         extra_compile_args=extra_compile_args,
     ),

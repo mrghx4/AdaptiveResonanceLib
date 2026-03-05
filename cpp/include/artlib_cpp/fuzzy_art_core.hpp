@@ -20,6 +20,7 @@ public:
     std::string name() const override;
     void fit(const MatrixView& x) override;
     std::vector<int> predict(const MatrixView& x) const override;
+    void set_weights(const std::vector<std::vector<double>>& weights);
 
     const std::vector<std::vector<double>>& weights() const;
     const std::vector<int>& labels() const;
