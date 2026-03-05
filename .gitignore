@@ -1,2 +1,7 @@
 .idea
 __pycache__
+.venv*
+*.so
+*.DS_Store
+.sklearn_data/
+*.egg-info/

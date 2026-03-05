@@ -97,7 +97,7 @@ class GaussianART(BaseART):
         cache = {"exp_dist_sig_dist": exp_dist_sig_dist}
         # ignore the (2*pi)^d term as that is constant
         p_i_cj = exp_dist_sig_dist / (params["alpha"] + sqrt_det_sig)
-        p_cj = n / np.sum(w_[-1] for w_ in self.W)
+        p_cj = n / sum(w_[-1] for w_ in self.W)
 
         activation = p_i_cj * p_cj
 
