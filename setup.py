@@ -41,8 +41,11 @@ ext_modules = [
     ),
     Extension(
         "artlib.optimized.backends.cpp.cppART1MAP",
-        [os.path.join(cpp_dir, "cppART1MAP.cpp")],
-        include_dirs=[pybind11.get_include()],
+        [
+            os.path.join(cpp_dir, "cppART1MAP.cpp"),
+            os.path.join(cpp_workspace_src, "art1map_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
         language="c++",
         extra_compile_args=extra_compile_args,
     ),

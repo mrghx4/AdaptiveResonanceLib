@@ -36,3 +36,16 @@ add_test(
     NAME art1_core_smoke
     COMMAND art1_core_smoke
 )
+
+add_executable(art1map_core_smoke
+    test_art1map_core_smoke.cpp
+)
+
+target_link_libraries(art1map_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME art1map_core_smoke
+    COMMAND art1map_core_smoke
+)
