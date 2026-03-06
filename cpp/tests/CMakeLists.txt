@@ -23,3 +23,16 @@ add_test(
     NAME fuzzy_art_core_smoke
     COMMAND fuzzy_art_core_smoke
 )
+
+add_executable(art1_core_smoke
+    test_art1_core_smoke.cpp
+)
+
+target_link_libraries(art1_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME art1_core_smoke
+    COMMAND art1_core_smoke
+)

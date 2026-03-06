@@ -1,8 +1,10 @@
 import numpy as np
+import pytest
 from sklearn.datasets import make_blobs
 from artlib.elementary.ART1 import ART1 as pyART1
 from artlib.optimized.backends.cpp.ART1 import ART1 as cppART1
 from artlib.common.utils import binarize_features_thermometer
+from artlib.optimized.backends.cpp.cppART1 import PredictART1
 
 def test_prepare_data():
     data, target = make_blobs(
@@ -46,3 +48,11 @@ def test_consistency():
     y_B = B.labels_
 
     assert np.array_equal(y_A, y_B)
+
+
+def test_predict_rejects_inconsistent_weight_dimensions():
+    X = np.array([[1.0, 0.0, 1.0]], dtype=np.float64)
+    bad_weights = [np.array([1.0, 0.5, 0.5, 1.0]), np.array([1.0, 1.0])]
+
+    with pytest.raises(ValueError):
+        PredictART1(X, rho=0.8, L=1.0, weights=bad_weights)
