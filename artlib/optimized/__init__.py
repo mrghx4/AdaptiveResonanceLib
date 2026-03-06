@@ -2,6 +2,11 @@
 modules. Currently, the supported ARTMAP variants and their available backends are as
 follows:
 
+GaussianART:
+    c++
+    python
+    torch (falls back to c++)
+
 FuzzyARTMAP:
     torch
     c++
@@ -23,3 +28,7 @@ BinaryFuzzyARTMAP:
 Additionally, a c++ implementation of a rational fraction sorting algorithm
 "fracsort" is provided.
 """
+
+from artlib.optimized.GaussianARTFactory import GaussianARTFactory
+
+__all__ = ["GaussianARTFactory"]

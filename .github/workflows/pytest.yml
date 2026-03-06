@@ -104,6 +104,10 @@ jobs:
         run: |
           poetry run pip show -f artlib
 
+      - name: Run C++ parity gate
+        run: |
+          SCIKIT_LEARN_DATA="$GITHUB_WORKSPACE/.sklearn_data" bash scripts/run_cpp_parity_gate.sh
+
       # 2) Fast suite (always runs) — exclude the factory tests so they don’t double-run
       - name: Run fast tests
         run: |

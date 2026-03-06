@@ -7,14 +7,23 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-if [[ ! -x ".venv/bin/python" ]]; then
-  echo "Missing .venv/bin/python. Create venv first." >&2
+PY_CMD=()
+if [[ -x ".venv/bin/python" ]]; then
+  PY_CMD=(".venv/bin/python")
+elif command -v poetry >/dev/null 2>&1; then
+  PY_CMD=("poetry" "run" "python")
+elif command -v python3 >/dev/null 2>&1; then
+  PY_CMD=("python3")
+elif command -v python >/dev/null 2>&1; then
+  PY_CMD=("python")
+else
+  echo "No Python interpreter found (.venv/bin/python, poetry, python3, or python)." >&2
   exit 1
 fi
 
 export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
 
-.venv/bin/python -m pytest -q \
+"${PY_CMD[@]}" -m pytest -q \
   unit_tests/test_ART1.py \
   unit_tests/test_ART1MAP.py \
   unit_tests/test_BinaryFuzzyARTMAP.py \
@@ -29,6 +38,7 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_cpp_GaussianART.py \
   unit_tests/test_cpp_GaussianARTMAP.py \
   unit_tests/test_cpp_HypersphereARTMAP.py \
+  unit_tests/test_GaussianARTFactory.py \
   unit_tests/test_fracsort.py \
   unit_tests/test_FuzzyART.py \
   unit_tests/test_cpp_FuzzyART.py \
