@@ -68,8 +68,11 @@ ext_modules = [
     ),
     Extension(
         "artlib.optimized.backends.cpp.cppBinaryFuzzyART",
-        [os.path.join(cpp_dir, "cppBinaryFuzzyART.cpp")],
-        include_dirs=[pybind11.get_include(), cpp_dir],
+        [
+            os.path.join(cpp_dir, "cppBinaryFuzzyART.cpp"),
+            os.path.join(cpp_workspace_src, "binary_fuzzy_art_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_dir, cpp_workspace_include],
         language="c++",
         extra_compile_args=extra_compile_args,
     ),

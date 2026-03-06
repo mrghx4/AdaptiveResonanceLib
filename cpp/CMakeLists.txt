@@ -9,6 +9,7 @@ option(ARTLIB_CPP_BUILD_TESTS "Build C++ smoke tests" ON)
 
 add_library(artlib_cpp_core STATIC
     src/art1map_core.cpp
+    src/binary_fuzzy_art_core.cpp
     src/backend_interface.cpp
     src/art1_core.cpp
     src/fuzzy_art_core.cpp

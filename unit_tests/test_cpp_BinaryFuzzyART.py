@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 from sklearn.datasets import make_blobs
 from artlib.elementary.BinaryFuzzyART import BinaryFuzzyART as pyBinaryFuzzyART
 from artlib.optimized.backends.cpp.BinaryFuzzyART import BinaryFuzzyART as \
     cppBinaryFuzzyART
 from artlib.common.utils import binarize_features_thermometer
+from artlib.optimized.backends.cpp.cppBinaryFuzzyART import PredictBinaryFuzzyART
 
 def test_prepare_data():
     data, target = make_blobs(
@@ -48,3 +50,11 @@ def test_consistency():
     y_B = B.labels_
 
     assert np.array_equal(y_A, y_B)
+
+
+def test_predict_rejects_inconsistent_weight_dimensions():
+    X = np.array([[1, 0, 1, 0]], dtype=np.int16)
+    bad_weights = [np.array([1, 0, 1, 0]), np.array([1, 0])]
+
+    with pytest.raises(ValueError):
+        PredictBinaryFuzzyART(X, rho=0.8, weights=bad_weights)
