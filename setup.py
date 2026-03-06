@@ -13,8 +13,11 @@ cpp_workspace_src = os.path.join("cpp", "src")
 ext_modules = [
     Extension(
         "artlib.optimized.backends.cpp.cppBinaryFuzzyARTMAP",
-        [os.path.join(cpp_dir, "cppBinaryFuzzyARTMAP.cpp")],
-        include_dirs=[pybind11.get_include()],
+        [
+            os.path.join(cpp_dir, "cppBinaryFuzzyARTMAP.cpp"),
+            os.path.join(cpp_workspace_src, "binary_fuzzy_artmap_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
         language="c++",
         extra_compile_args=extra_compile_args,
     ),

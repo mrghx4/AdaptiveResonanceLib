@@ -62,3 +62,16 @@ add_test(
     NAME binary_fuzzy_art_core_smoke
     COMMAND binary_fuzzy_art_core_smoke
 )
+
+add_executable(binary_fuzzy_artmap_core_smoke
+    test_binary_fuzzy_artmap_core_smoke.cpp
+)
+
+target_link_libraries(binary_fuzzy_artmap_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME binary_fuzzy_artmap_core_smoke
+    COMMAND binary_fuzzy_artmap_core_smoke
+)
