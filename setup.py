@@ -33,8 +33,11 @@ ext_modules = [
     ),
     Extension(
         "artlib.optimized.backends.cpp.cppHypersphereARTMAP",
-        [os.path.join(cpp_dir, "cppHypersphereARTMAP.cpp")],
-        include_dirs=[pybind11.get_include()],
+        [
+            os.path.join(cpp_dir, "cppHypersphereARTMAP.cpp"),
+            os.path.join(cpp_workspace_src, "hypersphere_artmap_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
         language="c++",
         extra_compile_args=extra_compile_args,
     ),

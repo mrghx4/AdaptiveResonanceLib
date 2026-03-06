@@ -1,0 +1,69 @@
+#pragma once
+
+#include <cstddef>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+namespace artlib_cpp {
+
+struct HypersphereARTMAPParams {
+    double rho;
+    double alpha;
+    double beta;
+    double r_hat;
+    std::string mt;
+    double epsilon;
+};
+
+class HypersphereARTMAPCore {
+public:
+    explicit HypersphereARTMAPCore(HypersphereARTMAPParams params);
+
+    void set_state(
+        const std::vector<std::vector<double>>& weights,
+        const std::vector<int>& cluster_labels
+    );
+
+    void fit(
+        const double* x,
+        std::size_t rows,
+        std::size_t cols,
+        const int* y,
+        std::size_t y_len
+    );
+
+    std::pair<std::vector<int>, std::vector<int>> predict(
+        const double* x, std::size_t rows, std::size_t cols
+    );
+
+    const std::vector<int>& labels_a() const;
+    const std::vector<std::vector<double>>& weights() const;
+    std::vector<int> cluster_labels() const;
+
+private:
+    void reset_rho();
+    double euclidean(const double* x, const std::vector<double>& w) const;
+    double category_choice(const double* sample, const std::vector<double>& w) const;
+    double match(const double* sample, const std::vector<double>& w) const;
+    std::vector<double> update_weight(
+        const std::vector<double>& i,
+        const std::vector<double>& w,
+        const std::vector<double>& cache
+    ) const;
+    std::vector<double> new_weight(const std::vector<double>& i) const;
+    bool match_tracking(double m);
+    bool matches_vigilance(double m) const;
+    int step_fit(const std::vector<double>& sample, int c_b);
+    void validate_x(const double* x, std::size_t rows, std::size_t cols) const;
+
+    HypersphereARTMAPParams params_;
+    int dim_;
+    double rho_runtime_;
+    std::vector<std::vector<double>> weights_;
+    std::unordered_map<int, int> cluster_map_;
+    std::vector<int> labels_a_;
+};
+
+}  // namespace artlib_cpp

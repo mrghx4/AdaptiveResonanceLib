@@ -14,6 +14,7 @@ add_library(artlib_cpp_core STATIC
     src/backend_interface.cpp
     src/art1_core.cpp
     src/gaussian_artmap_core.cpp
+    src/hypersphere_artmap_core.cpp
     src/fuzzy_artmap_core.cpp
     src/fuzzy_art_core.cpp
 )
