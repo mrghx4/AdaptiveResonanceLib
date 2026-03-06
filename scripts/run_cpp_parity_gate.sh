@@ -29,6 +29,7 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_BinaryFuzzyARTMAP.py \
   unit_tests/test_GaussianART.py \
   unit_tests/test_GaussianARTMAP.py \
+  unit_tests/test_HypersphereART.py \
   unit_tests/test_HypersphereARTMAP.py \
   unit_tests/test_FuzzyARTMAP.py \
   unit_tests/test_cpp_ART1.py \
@@ -37,6 +38,7 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_cpp_BinaryFuzzyARTMAP.py \
   unit_tests/test_cpp_GaussianART.py \
   unit_tests/test_cpp_GaussianARTMAP.py \
+  unit_tests/test_cpp_HypersphereART.py \
   unit_tests/test_cpp_HypersphereARTMAP.py \
   unit_tests/test_GaussianARTFactory.py \
   unit_tests/test_fracsort.py \

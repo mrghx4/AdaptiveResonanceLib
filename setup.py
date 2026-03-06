@@ -42,6 +42,16 @@ ext_modules = [
         extra_compile_args=extra_compile_args,
     ),
     Extension(
+        "artlib.optimized.backends.cpp.cppHypersphereART",
+        [
+            os.path.join(cpp_dir, "cppHypersphereART.cpp"),
+            os.path.join(cpp_workspace_src, "hypersphere_art_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+    ),
+    Extension(
         "artlib.optimized.backends.cpp.cppGaussianARTMAP",
         [
             os.path.join(cpp_dir, "cppGaussianARTMAP.cpp"),

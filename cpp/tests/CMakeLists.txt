@@ -115,6 +115,19 @@ add_test(
     COMMAND gaussian_art_core_smoke
 )
 
+add_executable(hypersphere_art_core_smoke
+    test_hypersphere_art_core_smoke.cpp
+)
+
+target_link_libraries(hypersphere_art_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME hypersphere_art_core_smoke
+    COMMAND hypersphere_art_core_smoke
+)
+
 add_executable(hypersphere_artmap_core_smoke
     test_hypersphere_artmap_core_smoke.cpp
 )
