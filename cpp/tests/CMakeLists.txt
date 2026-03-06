@@ -88,3 +88,16 @@ add_test(
     NAME fuzzy_artmap_core_smoke
     COMMAND fuzzy_artmap_core_smoke
 )
+
+add_executable(gaussian_artmap_core_smoke
+    test_gaussian_artmap_core_smoke.cpp
+)
+
+target_link_libraries(gaussian_artmap_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME gaussian_artmap_core_smoke
+    COMMAND gaussian_artmap_core_smoke
+)

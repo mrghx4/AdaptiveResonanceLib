@@ -18,11 +18,13 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_ART1.py \
   unit_tests/test_ART1MAP.py \
   unit_tests/test_BinaryFuzzyARTMAP.py \
+  unit_tests/test_GaussianARTMAP.py \
   unit_tests/test_FuzzyARTMAP.py \
   unit_tests/test_cpp_ART1.py \
   unit_tests/test_cpp_ART1MAP.py \
   unit_tests/test_cpp_BinaryFuzzyART.py \
   unit_tests/test_cpp_BinaryFuzzyARTMAP.py \
+  unit_tests/test_cpp_GaussianARTMAP.py \
   unit_tests/test_FuzzyART.py \
   unit_tests/test_cpp_FuzzyART.py \
   unit_tests/test_cpp_FuzzyARTMAP.py
