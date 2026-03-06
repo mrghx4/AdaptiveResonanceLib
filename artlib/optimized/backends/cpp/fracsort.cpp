@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "fraction_sort_core.hpp"
+#include "artlib_cpp/fraction_sort_core.hpp"
 
 namespace py = pybind11;
 

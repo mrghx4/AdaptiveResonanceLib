@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "../../artlib/optimized/backends/cpp/fraction_sort_core.hpp"
+#include "artlib_cpp/fraction_sort_core.hpp"
 
 namespace artlib_cpp {
 

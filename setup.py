@@ -52,6 +52,16 @@ ext_modules = [
         extra_compile_args=extra_compile_args,
     ),
     Extension(
+        "artlib.optimized.backends.cpp.cppGaussianART",
+        [
+            os.path.join(cpp_dir, "cppGaussianART.cpp"),
+            os.path.join(cpp_workspace_src, "gaussian_art_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+    ),
+    Extension(
         "artlib.optimized.backends.cpp.cppART1MAP",
         [
             os.path.join(cpp_dir, "cppART1MAP.cpp"),
@@ -64,7 +74,7 @@ ext_modules = [
     Extension(
         "artlib.optimized.backends.cpp.fracsort",
         [os.path.join(cpp_dir, "fracsort.cpp")],
-        include_dirs=[pybind11.get_include(), cpp_dir],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
         language="c++",
         extra_compile_args=extra_compile_args,
     ),
