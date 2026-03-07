@@ -20,6 +20,7 @@ os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".mplconfig"))
 
 from artlib.optimized.BinaryFuzzyARTMAPFactory import BinaryFuzzyARTMAPFactory
 from artlib.optimized.BayesianARTFactory import BayesianARTFactory
+from artlib.optimized.BayesianARTMAPFactory import BayesianARTMAPFactory
 from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
 from artlib.optimized.FuzzyARTMAPFactory import FuzzyARTMAPFactory
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
@@ -211,6 +212,16 @@ def main() -> int:
             backends=["python", "torch", "c++"],
             factory=HypersphereARTMAPFactory,
             kwargs_builder=lambda _: {"rho": 0.8, "alpha": 1e-10, "beta": 1.0, "r_hat": 8.0},
+        ),
+        Case(
+            name="BayesianARTMAP",
+            kind="artmap",
+            backends=["python", "torch", "c++"],
+            factory=BayesianARTMAPFactory,
+            kwargs_builder=lambda f: {
+                "rho": 0.7,
+                "cov_init": np.eye(f, dtype=np.float64),
+            },
         ),
         Case(
             name="BinaryFuzzyARTMAP",

@@ -62,6 +62,9 @@ from artlib.optimized.HypersphereARTMAPFactory import (
 from artlib.optimized.GaussianARTMAPFactory import (
     GaussianARTMAPFactory as GaussianARTMAP,
 )
+from artlib.optimized.BayesianARTMAPFactory import (
+    BayesianARTMAPFactory as BayesianARTMAP,
+)
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
 from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
@@ -100,6 +103,7 @@ __all__ = [
     "FuzzyARTMAP",
     "HypersphereARTMAP",
     "GaussianARTMAP",
+    "BayesianARTMAP",
     "GaussianARTFactory",
     "HypersphereARTFactory",
     "EllipsoidARTFactory",

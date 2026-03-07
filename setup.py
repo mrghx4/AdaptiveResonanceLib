@@ -72,6 +72,16 @@ ext_modules = [
         extra_compile_args=extra_compile_args,
     ),
     Extension(
+        "artlib.optimized.backends.cpp.cppBayesianARTMAP",
+        [
+            os.path.join(cpp_dir, "cppBayesianARTMAP.cpp"),
+            os.path.join(cpp_workspace_src, "bayesian_artmap_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+    ),
+    Extension(
         "artlib.optimized.backends.cpp.cppGaussianARTMAP",
         [
             os.path.join(cpp_dir, "cppGaussianARTMAP.cpp"),

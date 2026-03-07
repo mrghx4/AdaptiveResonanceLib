@@ -22,6 +22,11 @@ BayesianART:
     python
     torch (falls back to c++)
 
+BayesianARTMAP:
+    c++
+    python
+    torch (falls back to c++)
+
 FuzzyARTMAP:
     torch
     c++
@@ -48,10 +53,12 @@ from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
 from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
 from artlib.optimized.BayesianARTFactory import BayesianARTFactory
+from artlib.optimized.BayesianARTMAPFactory import BayesianARTMAPFactory
 
 __all__ = [
     "GaussianARTFactory",
     "HypersphereARTFactory",
     "EllipsoidARTFactory",
     "BayesianARTFactory",
+    "BayesianARTMAPFactory",
 ]
