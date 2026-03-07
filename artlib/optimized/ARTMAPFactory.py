@@ -45,10 +45,18 @@ class ARTMAPFactory:
                     RuntimeWarning,
                 )
                 accelerated_a = module_a
+            accelerated_b = accelerate_base_art_module(module_b)
+            if accelerated_b is None:
+                warnings.warn(
+                    f"No c++ acceleration mapping for module_b '{type(module_b).__name__}'. "
+                    "Using python module_b implementation.",
+                    RuntimeWarning,
+                )
+                accelerated_b = module_b
 
             from artlib.supervised.ARTMAP import ARTMAP
 
-            return ARTMAP(module_a=accelerated_a, module_b=module_b)
+            return ARTMAP(module_a=accelerated_a, module_b=accelerated_b)
 
         if b != "python":
             warnings.warn(

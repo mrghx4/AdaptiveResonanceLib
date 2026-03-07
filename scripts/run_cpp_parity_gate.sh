@@ -47,6 +47,7 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_cpp_EllipsoidART.py \
   unit_tests/test_cpp_GaussianART.py \
   unit_tests/test_cpp_GaussianARTMAP.py \
+  unit_tests/test_cpp_CVIMetrics.py \
   unit_tests/test_cpp_HypersphereART.py \
   unit_tests/test_cpp_QuadraticNeuronART.py \
   unit_tests/test_cpp_HypersphereARTMAP.py \
@@ -65,6 +66,11 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_FALCONFactory.py \
   unit_tests/test_TD_FALCONFactory.py \
   unit_tests/test_BARTMAPFactory.py \
+  unit_tests/test_iCVIFuzzyARTFactory.py \
+  unit_tests/test_FuzzyARTFactory.py \
+  unit_tests/test_BinaryFuzzyARTFactory.py \
+  unit_tests/test_TD_FALCONFactory_alias.py \
+  unit_tests/test_module_dispatch.py \
   unit_tests/test_HypersphereARTFactory.py \
   unit_tests/test_EllipsoidARTFactory.py \
   unit_tests/test_BayesianARTFactory.py \

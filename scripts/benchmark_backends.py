@@ -22,7 +22,9 @@ from artlib.optimized.BinaryFuzzyARTMAPFactory import BinaryFuzzyARTMAPFactory
 from artlib.optimized.ART2Factory import ART2Factory
 from artlib.optimized.BayesianARTFactory import BayesianARTFactory
 from artlib.optimized.BayesianARTMAPFactory import BayesianARTMAPFactory
+from artlib.optimized.BinaryFuzzyARTFactory import BinaryFuzzyARTFactory
 from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
+from artlib.optimized.FuzzyARTFactory import FuzzyARTFactory
 from artlib.optimized.FuzzyARTMAPFactory import FuzzyARTMAPFactory
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.GaussianARTMAPFactory import GaussianARTMAPFactory
@@ -243,6 +245,25 @@ def main() -> int:
                 "alpha": 1e-10,
                 "sigma_init": np.full((f,), 0.33, dtype=np.float64),
             },
+        ),
+        Case(
+            name="FuzzyART",
+            kind="art",
+            backends=["python", "torch", "c++"],
+            factory=FuzzyARTFactory,
+            kwargs_builder=lambda _: {
+                "rho": 0.8,
+                "alpha": 1e-10,
+                "beta": 1.0,
+            },
+        ),
+        Case(
+            name="BinaryFuzzyART",
+            kind="art",
+            backends=["python", "torch", "c++"],
+            factory=BinaryFuzzyARTFactory,
+            kwargs_builder=lambda _: {"rho": 0.8},
+            binary_input=True,
         ),
         Case(
             name="ART2A",

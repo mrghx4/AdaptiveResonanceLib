@@ -6,6 +6,14 @@ from typing import Optional, List, Callable, Literal, Iterable
 from matplotlib.axes import Axes
 from artlib.common.BaseART import BaseART
 
+try:
+    from artlib.optimized.backends.cpp.cppCVIMetrics import EvaluateCVI as _EvaluateCVI
+
+    _HAS_CPP_CVI = True
+except Exception:
+    _EvaluateCVI = None
+    _HAS_CPP_CVI = False
+
 
 class CVIART(BaseART):
     """CVI Art Classification.
@@ -150,23 +158,34 @@ class CVIART(BaseART):
         if len(self.W) < 2:
             return True
 
-        if extra["validity"] == self.CALINSKIHARABASZ:
-            valid_func = metrics.calinski_harabasz_score
-        elif extra["validity"] == self.DAVIESBOULDIN:
-            valid_func = metrics.davies_bouldin_score
-        elif extra["validity"] == self.SILHOUETTE:
-            valid_func = metrics.silhouette_score
-        else:
-            raise ValueError(f"Invalid Validity Parameter: {extra['validity']}")
-
-        old_VI = valid_func(self.data, self.labels_)
+        old_VI = self._evaluate_validity(self.data, self.labels_, extra["validity"])
         new_labels = np.copy(self.labels_)
         new_labels[extra["index"]] = c_
-        new_VI = valid_func(self.data, new_labels)
+        new_VI = self._evaluate_validity(self.data, new_labels, extra["validity"])
         if extra["validity"] != self.DAVIESBOULDIN:
             return np.bool_(new_VI > old_VI)
         else:
             return np.bool_(new_VI < old_VI)
+
+    @staticmethod
+    def _evaluate_validity(X: np.ndarray, labels: np.ndarray, validity: int) -> float:
+        """Evaluate a CVI score with C++ acceleration when available."""
+        if _HAS_CPP_CVI:
+            try:
+                X_ = np.ascontiguousarray(X, dtype=np.float64)
+                y_ = np.ascontiguousarray(labels, dtype=np.int32)
+                return float(_EvaluateCVI(X_, y_, int(validity)))
+            except Exception:
+                # Fall back to sklearn metrics for robustness/parity.
+                pass
+
+        if validity == CVIART.CALINSKIHARABASZ:
+            return float(metrics.calinski_harabasz_score(X, labels))
+        if validity == CVIART.DAVIESBOULDIN:
+            return float(metrics.davies_bouldin_score(X, labels))
+        if validity == CVIART.SILHOUETTE:
+            return float(metrics.silhouette_score(X, labels))
+        raise ValueError(f"Invalid Validity Parameter: {validity}")
 
     def _match_tracking(
         self,

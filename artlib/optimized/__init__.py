@@ -81,6 +81,10 @@ from artlib.optimized.SMARTFactory import SMARTFactory
 from artlib.optimized.CVIARTFactory import CVIARTFactory
 from artlib.optimized.FALCONFactory import FALCONFactory, TDFALCONFactory
 from artlib.optimized.BARTMAPFactory import BARTMAPFactory
+from artlib.optimized.iCVIFuzzyARTFactory import iCVIFuzzyARTFactory
+from artlib.optimized.FuzzyARTFactory import FuzzyARTFactory
+from artlib.optimized.BinaryFuzzyARTFactory import BinaryFuzzyARTFactory
+from artlib.optimized.TD_FALCONFactory import TD_FALCONFactory
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.ART2Factory import ART2Factory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
@@ -103,6 +107,10 @@ __all__ = [
     "FALCONFactory",
     "TDFALCONFactory",
     "BARTMAPFactory",
+    "iCVIFuzzyARTFactory",
+    "FuzzyARTFactory",
+    "BinaryFuzzyARTFactory",
+    "TD_FALCONFactory",
     "GaussianARTFactory",
     "ART2Factory",
     "HypersphereARTFactory",

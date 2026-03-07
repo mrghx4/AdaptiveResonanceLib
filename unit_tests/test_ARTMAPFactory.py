@@ -33,6 +33,7 @@ def test_factory_cpp_accelerates_module_a_when_supported():
     )
     assert isinstance(model, ARTMAP)
     assert isinstance(model.module_a, CppFuzzyART)
+    assert isinstance(model.module_b, CppFuzzyART)
 
 
 def test_factory_python_backend_returns_python_artmap():
@@ -52,15 +53,17 @@ def test_factory_torch_falls_back_to_cpp_dispatch_with_warning():
             backend="torch",
         )
     assert isinstance(model.module_a, CppFuzzyART)
+    assert isinstance(model.module_b, CppFuzzyART)
 
 
 def test_factory_unsupported_module_a_keeps_python_impl_with_warning():
     d = DummyART(params={"rho": 0.5})
     model_b = FuzzyART(rho=0.6, alpha=1e-10, beta=1.0)
-    with pytest.warns(RuntimeWarning, match=r"No c\+\+ acceleration mapping"):
+    with pytest.warns(RuntimeWarning, match=r"No c\+\+ acceleration mapping for module_a"):
         model = ARTMAPFactory(module_a=d, module_b=model_b, backend="c++")
     assert isinstance(model, ARTMAP)
     assert model.module_a is d
+    assert isinstance(model.module_b, CppFuzzyART)
 
 
 def test_factory_unknown_backend_warns_and_defaults_to_cpp_dispatch():

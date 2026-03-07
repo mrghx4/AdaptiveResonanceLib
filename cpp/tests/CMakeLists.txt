@@ -205,3 +205,16 @@ add_test(
     NAME quadratic_neuron_art_core_smoke
     COMMAND quadratic_neuron_art_core_smoke
 )
+
+add_executable(cvi_metrics_core_smoke
+    test_cvi_metrics_core_smoke.cpp
+)
+
+target_link_libraries(cvi_metrics_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME cvi_metrics_core_smoke
+    COMMAND cvi_metrics_core_smoke
+)
