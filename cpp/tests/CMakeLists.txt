@@ -141,6 +141,19 @@ add_test(
     COMMAND ellipsoid_art_core_smoke
 )
 
+add_executable(bayesian_art_core_smoke
+    test_bayesian_art_core_smoke.cpp
+)
+
+target_link_libraries(bayesian_art_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME bayesian_art_core_smoke
+    COMMAND bayesian_art_core_smoke
+)
+
 add_executable(hypersphere_artmap_core_smoke
     test_hypersphere_artmap_core_smoke.cpp
 )

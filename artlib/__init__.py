@@ -64,6 +64,8 @@ from artlib.optimized.GaussianARTMAPFactory import (
 )
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
+from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
+from artlib.optimized.BayesianARTFactory import BayesianARTFactory
 
 __all__ = [
     "BaseART",
@@ -100,4 +102,6 @@ __all__ = [
     "GaussianARTMAP",
     "GaussianARTFactory",
     "HypersphereARTFactory",
+    "EllipsoidARTFactory",
+    "BayesianARTFactory",
 ]

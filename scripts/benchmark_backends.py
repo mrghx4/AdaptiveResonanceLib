@@ -19,6 +19,8 @@ from sklearn.datasets import make_blobs
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".mplconfig"))
 
 from artlib.optimized.BinaryFuzzyARTMAPFactory import BinaryFuzzyARTMAPFactory
+from artlib.optimized.BayesianARTFactory import BayesianARTFactory
+from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
 from artlib.optimized.FuzzyARTMAPFactory import FuzzyARTMAPFactory
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.GaussianARTMAPFactory import GaussianARTMAPFactory
@@ -239,6 +241,29 @@ def main() -> int:
                 "alpha": 1e-10,
                 "beta": 1.0,
                 "r_hat": 8.0,
+            },
+        ),
+        Case(
+            name="EllipsoidART",
+            kind="art",
+            backends=["python", "torch", "c++"],
+            factory=EllipsoidARTFactory,
+            kwargs_builder=lambda _: {
+                "rho": 0.7,
+                "alpha": 1e-5,
+                "beta": 0.1,
+                "mu": 0.5,
+                "r_hat": 1.0,
+            },
+        ),
+        Case(
+            name="BayesianART",
+            kind="art",
+            backends=["python", "torch", "c++"],
+            factory=BayesianARTFactory,
+            kwargs_builder=lambda f: {
+                "rho": 0.7,
+                "cov_init": np.eye(f, dtype=np.float64),
             },
         ),
     ]

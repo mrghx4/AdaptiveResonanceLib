@@ -12,6 +12,16 @@ HypersphereART:
     python
     torch (falls back to c++)
 
+EllipsoidART:
+    c++
+    python
+    torch (falls back to c++)
+
+BayesianART:
+    c++
+    python
+    torch (falls back to c++)
+
 FuzzyARTMAP:
     torch
     c++
@@ -36,5 +46,12 @@ Additionally, a c++ implementation of a rational fraction sorting algorithm
 
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
+from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
+from artlib.optimized.BayesianARTFactory import BayesianARTFactory
 
-__all__ = ["GaussianARTFactory", "HypersphereARTFactory"]
+__all__ = [
+    "GaussianARTFactory",
+    "HypersphereARTFactory",
+    "EllipsoidARTFactory",
+    "BayesianARTFactory",
+]
