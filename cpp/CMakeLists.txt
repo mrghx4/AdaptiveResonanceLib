@@ -13,6 +13,7 @@ add_library(artlib_cpp_core STATIC
     src/binary_fuzzy_art_core.cpp
     src/backend_interface.cpp
     src/art1_core.cpp
+    src/ellipsoid_art_core.cpp
     src/gaussian_art_core.cpp
     src/gaussian_artmap_core.cpp
     src/hypersphere_art_core.cpp

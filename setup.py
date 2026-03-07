@@ -52,6 +52,16 @@ ext_modules = [
         extra_compile_args=extra_compile_args,
     ),
     Extension(
+        "artlib.optimized.backends.cpp.cppEllipsoidART",
+        [
+            os.path.join(cpp_dir, "cppEllipsoidART.cpp"),
+            os.path.join(cpp_workspace_src, "ellipsoid_art_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+    ),
+    Extension(
         "artlib.optimized.backends.cpp.cppGaussianARTMAP",
         [
             os.path.join(cpp_dir, "cppGaussianARTMAP.cpp"),
