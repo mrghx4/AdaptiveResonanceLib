@@ -25,6 +25,7 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
 
 "${PY_CMD[@]}" -m pytest -q \
   unit_tests/test_ART1.py \
+  unit_tests/test_ART2.py \
   unit_tests/test_ART1MAP.py \
   unit_tests/test_BayesianART.py \
   unit_tests/test_BayesianARTMAP.py \
@@ -33,9 +34,11 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_GaussianART.py \
   unit_tests/test_GaussianARTMAP.py \
   unit_tests/test_HypersphereART.py \
+  unit_tests/test_QuadraticNeuronART.py \
   unit_tests/test_HypersphereARTMAP.py \
   unit_tests/test_FuzzyARTMAP.py \
   unit_tests/test_cpp_ART1.py \
+  unit_tests/test_cpp_ART2.py \
   unit_tests/test_cpp_ART1MAP.py \
   unit_tests/test_cpp_BayesianART.py \
   unit_tests/test_cpp_BayesianARTMAP.py \
@@ -45,12 +48,15 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_cpp_GaussianART.py \
   unit_tests/test_cpp_GaussianARTMAP.py \
   unit_tests/test_cpp_HypersphereART.py \
+  unit_tests/test_cpp_QuadraticNeuronART.py \
   unit_tests/test_cpp_HypersphereARTMAP.py \
   unit_tests/test_GaussianARTFactory.py \
+  unit_tests/test_ART2Factory.py \
   unit_tests/test_HypersphereARTFactory.py \
   unit_tests/test_EllipsoidARTFactory.py \
   unit_tests/test_BayesianARTFactory.py \
   unit_tests/test_BayesianARTMAPFactory.py \
+  unit_tests/test_QuadraticNeuronARTFactory.py \
   unit_tests/test_fracsort.py \
   unit_tests/test_FuzzyART.py \
   unit_tests/test_cpp_FuzzyART.py \

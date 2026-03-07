@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(ARTLIB_CPP_BUILD_TESTS "Build C++ smoke tests" ON)
 
 add_library(artlib_cpp_core STATIC
+    src/art2_core.cpp
     src/bayesian_art_core.cpp
     src/bayesian_artmap_core.cpp
     src/art1map_core.cpp
@@ -20,6 +21,7 @@ add_library(artlib_cpp_core STATIC
     src/gaussian_artmap_core.cpp
     src/hypersphere_art_core.cpp
     src/hypersphere_artmap_core.cpp
+    src/quadratic_neuron_art_core.cpp
     src/fuzzy_artmap_core.cpp
     src/fuzzy_art_core.cpp
 )

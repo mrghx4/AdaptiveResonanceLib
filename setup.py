@@ -102,10 +102,30 @@ ext_modules = [
         extra_compile_args=extra_compile_args,
     ),
     Extension(
+        "artlib.optimized.backends.cpp.cppQuadraticNeuronART",
+        [
+            os.path.join(cpp_dir, "cppQuadraticNeuronART.cpp"),
+            os.path.join(cpp_workspace_src, "quadratic_neuron_art_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+    ),
+    Extension(
         "artlib.optimized.backends.cpp.cppART1MAP",
         [
             os.path.join(cpp_dir, "cppART1MAP.cpp"),
             os.path.join(cpp_workspace_src, "art1map_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+    ),
+    Extension(
+        "artlib.optimized.backends.cpp.cppART2",
+        [
+            os.path.join(cpp_dir, "cppART2.cpp"),
+            os.path.join(cpp_workspace_src, "art2_core.cpp"),
         ],
         include_dirs=[pybind11.get_include(), cpp_workspace_include],
         language="c++",

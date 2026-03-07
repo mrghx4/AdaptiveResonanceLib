@@ -86,6 +86,66 @@ const std::vector<std::vector<double>>& BayesianARTCore::weights() const { retur
 
 bool BayesianARTCore::invert_and_det(const std::vector<double>& a, std::vector<double>& inv, double& det) const {
     const int n = dim_;
+    // Fast SPD path: covariance matrices are expected to be symmetric positive definite.
+    std::vector<double> l(static_cast<std::size_t>(n * n), 0.0);
+    bool chol_ok = true;
+    for (int i = 0; i < n && chol_ok; ++i) {
+        for (int j = 0; j <= i; ++j) {
+            double sum = a[static_cast<std::size_t>(i * n + j)];
+            for (int k = 0; k < j; ++k) {
+                sum -= l[static_cast<std::size_t>(i * n + k)] * l[static_cast<std::size_t>(j * n + k)];
+            }
+            if (i == j) {
+                if (sum <= 1e-15) {
+                    chol_ok = false;
+                    break;
+                }
+                l[static_cast<std::size_t>(i * n + j)] = std::sqrt(sum);
+            } else {
+                const double ljj = l[static_cast<std::size_t>(j * n + j)];
+                if (std::abs(ljj) <= 1e-15) {
+                    chol_ok = false;
+                    break;
+                }
+                l[static_cast<std::size_t>(i * n + j)] = sum / ljj;
+            }
+        }
+    }
+
+    if (chol_ok) {
+        det = 1.0;
+        for (int i = 0; i < n; ++i) {
+            const double d = l[static_cast<std::size_t>(i * n + i)];
+            det *= d * d;
+        }
+
+        inv.assign(static_cast<std::size_t>(n * n), 0.0);
+        std::vector<double> y(static_cast<std::size_t>(n), 0.0);
+        std::vector<double> x(static_cast<std::size_t>(n), 0.0);
+
+        for (int col = 0; col < n; ++col) {
+            for (int i = 0; i < n; ++i) {
+                double sum = (i == col) ? 1.0 : 0.0;
+                for (int k = 0; k < i; ++k) {
+                    sum -= l[static_cast<std::size_t>(i * n + k)] * y[static_cast<std::size_t>(k)];
+                }
+                y[static_cast<std::size_t>(i)] = sum / l[static_cast<std::size_t>(i * n + i)];
+            }
+            for (int i = n - 1; i >= 0; --i) {
+                double sum = y[static_cast<std::size_t>(i)];
+                for (int k = i + 1; k < n; ++k) {
+                    sum -= l[static_cast<std::size_t>(k * n + i)] * x[static_cast<std::size_t>(k)];
+                }
+                x[static_cast<std::size_t>(i)] = sum / l[static_cast<std::size_t>(i * n + i)];
+            }
+            for (int i = 0; i < n; ++i) {
+                inv[static_cast<std::size_t>(i * n + col)] = x[static_cast<std::size_t>(i)];
+            }
+        }
+        return true;
+    }
+
+    // Fallback for non-SPD / numerically problematic inputs.
     inv.assign(static_cast<std::size_t>(n * n), 0.0);
     std::vector<double> m = a;
     for (int i = 0; i < n; ++i) inv[static_cast<std::size_t>(i * n + i)] = 1.0;

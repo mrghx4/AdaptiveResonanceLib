@@ -19,6 +19,7 @@ from sklearn.datasets import make_blobs
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".mplconfig"))
 
 from artlib.optimized.BinaryFuzzyARTMAPFactory import BinaryFuzzyARTMAPFactory
+from artlib.optimized.ART2Factory import ART2Factory
 from artlib.optimized.BayesianARTFactory import BayesianARTFactory
 from artlib.optimized.BayesianARTMAPFactory import BayesianARTMAPFactory
 from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
@@ -27,6 +28,7 @@ from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.GaussianARTMAPFactory import GaussianARTMAPFactory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
 from artlib.optimized.HypersphereARTMAPFactory import HypersphereARTMAPFactory
+from artlib.optimized.QuadraticNeuronARTFactory import QuadraticNeuronARTFactory
 
 
 @dataclass
@@ -243,6 +245,17 @@ def main() -> int:
             },
         ),
         Case(
+            name="ART2A",
+            kind="art",
+            backends=["python", "torch", "c++"],
+            factory=ART2Factory,
+            kwargs_builder=lambda _: {
+                "rho": 0.7,
+                "alpha": 0.1,
+                "beta": 0.5,
+            },
+        ),
+        Case(
             name="HypersphereART",
             kind="art",
             backends=["python", "torch", "c++"],
@@ -275,6 +288,19 @@ def main() -> int:
             kwargs_builder=lambda f: {
                 "rho": 0.7,
                 "cov_init": np.eye(f, dtype=np.float64),
+            },
+        ),
+        Case(
+            name="QuadraticNeuronART",
+            kind="art",
+            backends=["python", "torch", "c++"],
+            factory=QuadraticNeuronARTFactory,
+            kwargs_builder=lambda _: {
+                "rho": 0.7,
+                "s_init": 0.5,
+                "lr_b": 0.1,
+                "lr_w": 0.1,
+                "lr_s": 0.05,
             },
         ),
     ]

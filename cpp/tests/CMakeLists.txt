@@ -37,6 +37,19 @@ add_test(
     COMMAND art1_core_smoke
 )
 
+add_executable(art2_core_smoke
+    test_art2_core_smoke.cpp
+)
+
+target_link_libraries(art2_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME art2_core_smoke
+    COMMAND art2_core_smoke
+)
+
 add_executable(art1map_core_smoke
     test_art1map_core_smoke.cpp
 )
@@ -178,4 +191,17 @@ target_link_libraries(hypersphere_artmap_core_smoke
 add_test(
     NAME hypersphere_artmap_core_smoke
     COMMAND hypersphere_artmap_core_smoke
+)
+
+add_executable(quadratic_neuron_art_core_smoke
+    test_quadratic_neuron_art_core_smoke.cpp
+)
+
+target_link_libraries(quadratic_neuron_art_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME quadratic_neuron_art_core_smoke
+    COMMAND quadratic_neuron_art_core_smoke
 )

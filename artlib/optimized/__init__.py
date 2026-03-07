@@ -7,6 +7,11 @@ GaussianART:
     python
     torch (falls back to c++)
 
+ART2A:
+    c++
+    python
+    torch (falls back to c++)
+
 HypersphereART:
     c++
     python
@@ -18,6 +23,11 @@ EllipsoidART:
     torch (falls back to c++)
 
 BayesianART:
+    c++
+    python
+    torch (falls back to c++)
+
+QuadraticNeuronART:
     c++
     python
     torch (falls back to c++)
@@ -50,15 +60,19 @@ Additionally, a c++ implementation of a rational fraction sorting algorithm
 """
 
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
+from artlib.optimized.ART2Factory import ART2Factory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
 from artlib.optimized.EllipsoidARTFactory import EllipsoidARTFactory
 from artlib.optimized.BayesianARTFactory import BayesianARTFactory
 from artlib.optimized.BayesianARTMAPFactory import BayesianARTMAPFactory
+from artlib.optimized.QuadraticNeuronARTFactory import QuadraticNeuronARTFactory
 
 __all__ = [
     "GaussianARTFactory",
+    "ART2Factory",
     "HypersphereARTFactory",
     "EllipsoidARTFactory",
     "BayesianARTFactory",
     "BayesianARTMAPFactory",
+    "QuadraticNeuronARTFactory",
 ]
