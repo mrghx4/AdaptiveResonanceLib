@@ -65,6 +65,12 @@ from artlib.optimized.GaussianARTMAPFactory import (
 from artlib.optimized.BayesianARTMAPFactory import (
     BayesianARTMAPFactory as BayesianARTMAP,
 )
+from artlib.optimized.ART1MAPFactory import ART1MAPFactory as ART1MAP
+from artlib.optimized.ART1Factory import ART1Factory
+from artlib.optimized.SimpleARTMAPFactory import SimpleARTMAPFactory
+from artlib.optimized.ARTMAPFactory import ARTMAPFactory
+from artlib.optimized.TopoARTFactory import TopoARTFactory
+from artlib.optimized.DualVigilanceARTFactory import DualVigilanceARTFactory
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.ART2Factory import ART2Factory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
@@ -106,6 +112,12 @@ __all__ = [
     "HypersphereARTMAP",
     "GaussianARTMAP",
     "BayesianARTMAP",
+    "ART1MAP",
+    "ART1Factory",
+    "SimpleARTMAPFactory",
+    "ARTMAPFactory",
+    "TopoARTFactory",
+    "DualVigilanceARTFactory",
     "GaussianARTFactory",
     "ART2Factory",
     "HypersphereARTFactory",

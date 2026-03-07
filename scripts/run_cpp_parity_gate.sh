@@ -52,6 +52,12 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_cpp_HypersphereARTMAP.py \
   unit_tests/test_GaussianARTFactory.py \
   unit_tests/test_ART2Factory.py \
+  unit_tests/test_ART1Factory.py \
+  unit_tests/test_ART1MAPFactory.py \
+  unit_tests/test_SimpleARTMAPFactory.py \
+  unit_tests/test_ARTMAPFactory.py \
+  unit_tests/test_TopoARTFactory.py \
+  unit_tests/test_DualVigilanceARTFactory.py \
   unit_tests/test_HypersphereARTFactory.py \
   unit_tests/test_EllipsoidARTFactory.py \
   unit_tests/test_BayesianARTFactory.py \
