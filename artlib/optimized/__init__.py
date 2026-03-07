@@ -7,6 +7,11 @@ GaussianART:
     python
     torch (falls back to c++)
 
+HypersphereART:
+    c++
+    python
+    torch (falls back to c++)
+
 FuzzyARTMAP:
     torch
     c++
@@ -30,5 +35,6 @@ Additionally, a c++ implementation of a rational fraction sorting algorithm
 """
 
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
+from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
 
-__all__ = ["GaussianARTFactory"]
+__all__ = ["GaussianARTFactory", "HypersphereARTFactory"]

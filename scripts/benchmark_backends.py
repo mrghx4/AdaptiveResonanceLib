@@ -22,6 +22,7 @@ from artlib.optimized.BinaryFuzzyARTMAPFactory import BinaryFuzzyARTMAPFactory
 from artlib.optimized.FuzzyARTMAPFactory import FuzzyARTMAPFactory
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.GaussianARTMAPFactory import GaussianARTMAPFactory
+from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
 from artlib.optimized.HypersphereARTMAPFactory import HypersphereARTMAPFactory
 
 
@@ -220,12 +221,24 @@ def main() -> int:
         Case(
             name="GaussianART",
             kind="art",
-            backends=["python", "c++"],
+            backends=["python", "torch", "c++"],
             factory=GaussianARTFactory,
             kwargs_builder=lambda f: {
                 "rho": 0.05,
                 "alpha": 1e-10,
                 "sigma_init": np.full((f,), 0.33, dtype=np.float64),
+            },
+        ),
+        Case(
+            name="HypersphereART",
+            kind="art",
+            backends=["python", "torch", "c++"],
+            factory=HypersphereARTFactory,
+            kwargs_builder=lambda _: {
+                "rho": 0.8,
+                "alpha": 1e-10,
+                "beta": 1.0,
+                "r_hat": 8.0,
             },
         ),
     ]

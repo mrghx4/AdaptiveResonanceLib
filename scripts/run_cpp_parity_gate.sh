@@ -41,6 +41,7 @@ export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
   unit_tests/test_cpp_HypersphereART.py \
   unit_tests/test_cpp_HypersphereARTMAP.py \
   unit_tests/test_GaussianARTFactory.py \
+  unit_tests/test_HypersphereARTFactory.py \
   unit_tests/test_fracsort.py \
   unit_tests/test_FuzzyART.py \
   unit_tests/test_cpp_FuzzyART.py \
