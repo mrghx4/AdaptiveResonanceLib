@@ -1,22 +1,22 @@
-"""Factory for generating optimized DualVigilanceART models using various backends."""
+"""Factory for generating optimized CVIART models using various backends."""
 
 import warnings
 
 from artlib.optimized._module_dispatch import accelerate_base_art_module
 
 
-class DualVigilanceARTFactory:
-    """Factory for generating optimized DualVigilanceART models using various backends."""
+class CVIARTFactory:
+    """Factory for generating optimized CVIART models using various backends."""
 
     def __new__(
         cls,
         base_module,
-        rho_lower_bound: float,
+        validity: int,
         *,
         backend: str = "c++",
         device: str = "cpu",
     ):
-        """Initialize a DualVigilanceART model."""
+        """Initialize a CVIART model."""
         del device
 
         from artlib.common.BaseART import BaseART
@@ -28,7 +28,7 @@ class DualVigilanceARTFactory:
 
         if b == "torch":
             warnings.warn(
-                "Backend 'torch' is not implemented for DualVigilanceART. "
+                "Backend 'torch' is not implemented for CVIART. "
                 "Falling back to 'c++' dispatch.",
                 RuntimeWarning,
             )
@@ -44,24 +44,21 @@ class DualVigilanceARTFactory:
                 )
                 accelerated = base_module
 
-            from artlib.topological.DualVigilanceART import DualVigilanceART
+            from artlib.cvi.CVIART import CVIART
 
-            return DualVigilanceART(
-                base_module=accelerated,
-                rho_lower_bound=rho_lower_bound,
-            )
+            return CVIART(base_module=accelerated, validity=validity)
 
         if b != "python":
             warnings.warn(
                 f"Unknown backend '{backend}', defaulting to c++ dispatch.",
                 RuntimeWarning,
             )
-            return DualVigilanceARTFactory(
+            return CVIARTFactory(
                 base_module=base_module,
-                rho_lower_bound=rho_lower_bound,
+                validity=validity,
                 backend="c++",
             )
 
-        from artlib.topological.DualVigilanceART import DualVigilanceART
+        from artlib.cvi.CVIART import CVIART
 
-        return DualVigilanceART(base_module=base_module, rho_lower_bound=rho_lower_bound)
+        return CVIART(base_module=base_module, validity=validity)

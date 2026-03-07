@@ -75,6 +75,12 @@ from artlib.optimized.SimpleARTMAPFactory import SimpleARTMAPFactory
 from artlib.optimized.ARTMAPFactory import ARTMAPFactory
 from artlib.optimized.TopoARTFactory import TopoARTFactory
 from artlib.optimized.DualVigilanceARTFactory import DualVigilanceARTFactory
+from artlib.optimized.FusionARTFactory import FusionARTFactory
+from artlib.optimized.DeepARTMAPFactory import DeepARTMAPFactory
+from artlib.optimized.SMARTFactory import SMARTFactory
+from artlib.optimized.CVIARTFactory import CVIARTFactory
+from artlib.optimized.FALCONFactory import FALCONFactory, TDFALCONFactory
+from artlib.optimized.BARTMAPFactory import BARTMAPFactory
 from artlib.optimized.GaussianARTFactory import GaussianARTFactory
 from artlib.optimized.ART2Factory import ART2Factory
 from artlib.optimized.HypersphereARTFactory import HypersphereARTFactory
@@ -90,6 +96,13 @@ __all__ = [
     "ARTMAPFactory",
     "TopoARTFactory",
     "DualVigilanceARTFactory",
+    "FusionARTFactory",
+    "DeepARTMAPFactory",
+    "SMARTFactory",
+    "CVIARTFactory",
+    "FALCONFactory",
+    "TDFALCONFactory",
+    "BARTMAPFactory",
     "GaussianARTFactory",
     "ART2Factory",
     "HypersphereARTFactory",
