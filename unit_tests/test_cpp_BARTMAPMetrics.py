@@ -58,3 +58,10 @@ def test_any_cluster_match_raises_for_missing_cluster():
     labels = np.array([0, 1, 0, 1], dtype=np.int32)
     with pytest.raises(ValueError):
         AnyClusterMatch(X, k=0, n_clusters_b=3, eta=2.0, column_labels=labels)
+
+
+def test_any_cluster_match_with_zero_clusters_is_false():
+    X = np.eye(4, dtype=np.float64)
+    labels = np.array([0, 1, 0, 1], dtype=np.int32)
+    out = AnyClusterMatch(X, k=0, n_clusters_b=0, eta=0.0, column_labels=labels)
+    assert out is False

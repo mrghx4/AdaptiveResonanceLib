@@ -67,6 +67,10 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self.params = params
         self.module_a = module_a
         self.module_b = module_b
+        self._cpp_average_available = AveragePearsonCorr is not None
+        self._cpp_match_available = AnyClusterMatch is not None
+        self._module_b_n_clusters_cached: Optional[int] = None
+        self._reset_cpp_metric_cache()
 
     def __getattr__(self, key):
         if key in self.params:
@@ -276,10 +280,9 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             features in cluster `c_b`.
 
         """
-        if AveragePearsonCorr is not None:
+        if self._cpp_average_available and AveragePearsonCorr is not None:
             try:
-                X_64 = np.ascontiguousarray(X, dtype=np.float64)
-                labels = np.ascontiguousarray(self.column_labels_, dtype=np.int32)
+                X_64, labels = self._ensure_cpp_metric_cache(X)
                 return float(AveragePearsonCorr(X_64, int(k), int(c_b), labels))
             except Exception:
                 # Preserve Python/scipy implementation as authoritative fallback.
@@ -333,6 +336,45 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         M = self._average_pearson_corr(X, k, c_b)
         return M >= self.params["eta"]
 
+    @staticmethod
+    def _to_cpp_float64_c(x: np.ndarray) -> np.ndarray:
+        if x.dtype == np.float64 and x.flags["C_CONTIGUOUS"]:
+            return x
+        return np.ascontiguousarray(x, dtype=np.float64)
+
+    @staticmethod
+    def _to_cpp_int32_c(x: np.ndarray) -> np.ndarray:
+        if x.dtype == np.int32 and x.flags["C_CONTIGUOUS"]:
+            return x
+        return np.ascontiguousarray(x, dtype=np.int32)
+
+    def _reset_cpp_metric_cache(self):
+        self._cpp_metrics_X64 = None
+        self._cpp_metrics_labels = None
+        self._cpp_metrics_X_ref = None
+        self._cpp_metrics_labels_ref = None
+
+    def _ensure_cpp_metric_cache(self, X: np.ndarray):
+        """Create or refresh contiguous buffers used by optional C++ metric helpers."""
+        labels = self.column_labels_
+        cache_ok = (
+            self._cpp_metrics_X64 is not None
+            and self._cpp_metrics_labels is not None
+            and self._cpp_metrics_X_ref is X
+            and self._cpp_metrics_labels_ref is labels
+        )
+        if not cache_ok:
+            self._cpp_metrics_X64 = self._to_cpp_float64_c(X)
+            self._cpp_metrics_labels = self._to_cpp_int32_c(labels)
+            self._cpp_metrics_X_ref = X
+            self._cpp_metrics_labels_ref = labels
+        return self._cpp_metrics_X64, self._cpp_metrics_labels
+
+    def _module_b_n_clusters(self) -> int:
+        if self._module_b_n_clusters_cached is None:
+            self._module_b_n_clusters_cached = len(self.module_b.W)
+        return int(self._module_b_n_clusters_cached)
+
     def match_reset_func(
         self,
         i: np.ndarray,
@@ -366,26 +408,38 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
 
         """
         k = extra["k"]
-        if AnyClusterMatch is not None:
+        match_state = extra.get("match_state")
+        if isinstance(match_state, dict) and "any_cluster_match" in match_state:
+            return bool(match_state["any_cluster_match"])
+
+        n_clusters_b = self._module_b_n_clusters()
+
+        if self._cpp_match_available and AnyClusterMatch is not None:
             try:
-                X_64 = np.ascontiguousarray(self.X, dtype=np.float64)
-                labels = np.ascontiguousarray(self.column_labels_, dtype=np.int32)
-                return bool(
+                X_64, labels = self._ensure_cpp_metric_cache(self.X)
+                result = bool(
                     AnyClusterMatch(
                         X_64,
                         int(k),
-                        int(len(self.module_b.W)),
+                        n_clusters_b,
                         float(self.params["eta"]),
                         labels,
                     )
                 )
+                if isinstance(match_state, dict):
+                    match_state["any_cluster_match"] = result
+                return result
             except Exception:
                 # Preserve Python loop as authoritative fallback.
                 pass
 
-        for cluster_b in range(len(self.module_b.W)):
+        for cluster_b in range(n_clusters_b):
             if self.match_criterion_bin(self.X, k, cluster_b, params):
+                if isinstance(match_state, dict):
+                    match_state["any_cluster_match"] = True
                 return True
+        if isinstance(match_state, dict):
+            match_state["any_cluster_match"] = False
         return False
 
     def step_fit(self, X: np.ndarray, k: int) -> int:
@@ -404,9 +458,18 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             The cluster label of the input sample.
 
         """
-        match_reset_func = lambda i, w, cluster, params, cache: self.match_reset_func(
-            i, w, cluster, params=params, extra={"k": k}, cache=cache
-        )
+        match_state: dict = {}
+
+        def match_reset_func(i, w, cluster, params, cache):
+            return self.match_reset_func(
+                i,
+                w,
+                cluster,
+                params=params,
+                extra={"k": k, "match_state": match_state},
+                cache=cache,
+            )
+
         c_a = self.module_a.step_fit(X[k, :], match_reset_func=match_reset_func)
         return c_a
 
@@ -422,6 +485,8 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
 
         """
         # Check that X and y have correct shape
+        self._reset_cpp_metric_cache()
+        self._module_b_n_clusters_cached = None
         self.X = X
 
         n = X.shape[0]
@@ -430,6 +495,8 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self.validate_data(X_a, X_b)
 
         self.module_b = self.module_b.fit(X_b, max_iter=max_iter)
+        self._module_b_n_clusters_cached = len(self.module_b.W)
+        self._ensure_cpp_metric_cache(self.X)
 
         # init module A
         self.module_a.W = []

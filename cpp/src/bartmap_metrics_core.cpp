@@ -102,7 +102,8 @@ double average_pearson_corr(
         throw std::invalid_argument("no rows for cluster");
     }
 
-    const auto comp_idx = indices_for_cluster(column_labels, cols, c_b);
+    // labels_len == rows == cols above, so row/component masks are identical.
+    const auto& comp_idx = row_idx;
     if (comp_idx.size() < 2) return std::numeric_limits<double>::quiet_NaN();
 
     double sum = 0.0;
@@ -136,6 +137,9 @@ bool any_cluster_match(
     }
     if (labels_len != rows || labels_len != cols) {
         throw std::invalid_argument("column_labels length must equal both rows and cols");
+    }
+    if (n_clusters_b == 0) {
+        return false;
     }
 
     const auto cluster_indices = indices_by_cluster(column_labels, labels_len, n_clusters_b);
