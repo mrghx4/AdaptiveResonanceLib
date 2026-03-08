@@ -51,3 +51,10 @@ def test_any_cluster_match_matches_python_reference():
         for c_b in range(n_clusters_b)
     )
     assert cpp == py
+
+
+def test_any_cluster_match_raises_for_missing_cluster():
+    X = np.eye(4, dtype=np.float64)
+    labels = np.array([0, 1, 0, 1], dtype=np.int32)
+    with pytest.raises(ValueError):
+        AnyClusterMatch(X, k=0, n_clusters_b=3, eta=2.0, column_labels=labels)

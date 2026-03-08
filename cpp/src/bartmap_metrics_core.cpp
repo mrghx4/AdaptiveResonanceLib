@@ -9,16 +9,19 @@ namespace artlib_cpp {
 
 namespace {
 
-double pearson_corr(const std::vector<double>& a, const std::vector<double>& b) {
-    if (a.size() != b.size()) throw std::invalid_argument("vector size mismatch");
-    const std::size_t n = a.size();
+double pearson_corr_indexed(
+    const double* a,
+    const double* b,
+    const std::vector<std::size_t>& idx
+) {
+    const std::size_t n = idx.size();
     if (n < 2) return std::numeric_limits<double>::quiet_NaN();
 
     double mean_a = 0.0;
     double mean_b = 0.0;
-    for (std::size_t i = 0; i < n; ++i) {
-        mean_a += a[i];
-        mean_b += b[i];
+    for (std::size_t j : idx) {
+        mean_a += a[j];
+        mean_b += b[j];
     }
     mean_a /= static_cast<double>(n);
     mean_b /= static_cast<double>(n);
@@ -26,9 +29,9 @@ double pearson_corr(const std::vector<double>& a, const std::vector<double>& b) 
     double num = 0.0;
     double den_a = 0.0;
     double den_b = 0.0;
-    for (std::size_t i = 0; i < n; ++i) {
-        const double da = a[i] - mean_a;
-        const double db = b[i] - mean_b;
+    for (std::size_t j : idx) {
+        const double da = a[j] - mean_a;
+        const double db = b[j] - mean_b;
         num += da * db;
         den_a += da * da;
         den_b += db * db;
@@ -52,13 +55,18 @@ std::vector<std::size_t> indices_for_cluster(
     return out;
 }
 
-std::vector<double> select_components(
-    const double* row,
-    const std::vector<std::size_t>& comp_idx
+std::vector<std::vector<std::size_t>> indices_by_cluster(
+    const int* labels,
+    std::size_t n,
+    std::size_t n_clusters
 ) {
-    std::vector<double> out;
-    out.reserve(comp_idx.size());
-    for (std::size_t j : comp_idx) out.push_back(row[j]);
+    std::vector<std::vector<std::size_t>> out(n_clusters);
+    for (std::size_t i = 0; i < n; ++i) {
+        const int c = labels[i];
+        if (c >= 0 && static_cast<std::size_t>(c) < n_clusters) {
+            out[static_cast<std::size_t>(c)].push_back(i);
+        }
+    }
     return out;
 }
 
@@ -95,14 +103,13 @@ double average_pearson_corr(
     }
 
     const auto comp_idx = indices_for_cluster(column_labels, cols, c_b);
-    const std::vector<double> x_k_cb = select_components(x + k * cols, comp_idx);
-
-    if (x_k_cb.size() < 2) return std::numeric_limits<double>::quiet_NaN();
+    if (comp_idx.size() < 2) return std::numeric_limits<double>::quiet_NaN();
 
     double sum = 0.0;
+    const double* x_k = x + k * cols;
     for (std::size_t r : row_idx) {
-        const std::vector<double> x_r_cb = select_components(x + r * cols, comp_idx);
-        sum += pearson_corr(x_k_cb, x_r_cb);
+        const double* x_r = x + r * cols;
+        sum += pearson_corr_indexed(x_k, x_r, comp_idx);
     }
 
     return sum / static_cast<double>(row_idx.size());
@@ -118,16 +125,35 @@ bool any_cluster_match(
     std::size_t n_clusters_b,
     double eta
 ) {
+    if (x == nullptr || column_labels == nullptr) {
+        throw std::invalid_argument("X and column_labels must be non-null");
+    }
+    if (rows == 0 || cols == 0) {
+        throw std::invalid_argument("X must be non-empty");
+    }
+    if (k >= rows) {
+        throw std::invalid_argument("k out of bounds");
+    }
+    if (labels_len != rows || labels_len != cols) {
+        throw std::invalid_argument("column_labels length must equal both rows and cols");
+    }
+
+    const auto cluster_indices = indices_by_cluster(column_labels, labels_len, n_clusters_b);
+    const double* x_k = x + k * cols;
+
     for (std::size_t c_b = 0; c_b < n_clusters_b; ++c_b) {
-        const double m = average_pearson_corr(
-            x,
-            rows,
-            cols,
-            column_labels,
-            labels_len,
-            k,
-            static_cast<int>(c_b)
-        );
+        const auto& idx = cluster_indices[c_b];
+        if (idx.empty()) {
+            throw std::invalid_argument("no rows for cluster");
+        }
+        if (idx.size() < 2) continue;
+
+        double sum = 0.0;
+        for (std::size_t r : idx) {
+            const double* x_r = x + r * cols;
+            sum += pearson_corr_indexed(x_k, x_r, idx);
+        }
+        const double m = sum / static_cast<double>(idx.size());
         if (m >= eta) return true;
     }
     return false;
