@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 from typing import Optional
+import artlib.biclustering.BARTMAP as bartmap_module
 from artlib.biclustering.BARTMAP import BARTMAP
 from artlib.elementary.FuzzyART import FuzzyART
 from artlib.common.BaseART import BaseART
@@ -82,6 +83,42 @@ def test_match_criterion_bin(bartmap_model):
 
     result = bartmap_model.match_criterion_bin(X, 9, 0, {"eta": 0.5})
     assert isinstance(result, bool)  # Ensure the result is a boolean
+
+
+def test_average_pearson_corr_python_fallback(monkeypatch, bartmap_model):
+    X = np.random.rand(12, 12)
+    bartmap_model.X = X
+
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+
+    monkeypatch.setattr(bartmap_module, "AveragePearsonCorr", None)
+    r = bartmap_model._average_pearson_corr(X, k=0, c_b=0)
+    assert isinstance(r, float)
+
+
+def test_match_reset_func_python_fallback(monkeypatch, bartmap_model):
+    X = np.random.rand(10, 10)
+    bartmap_model.X = X
+
+    X_a = bartmap_model.module_a.prepare_data(X)
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+
+    # init module A
+    bartmap_model.module_a.W = []
+    bartmap_model.module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
+    bartmap_model.step_fit(X_a, 0)
+
+    monkeypatch.setattr(bartmap_module, "AnyClusterMatch", None)
+    result = bartmap_model.match_reset_func(
+        i=X_a[0],
+        w=np.zeros_like(X_a[0]),
+        cluster_a=0,
+        params={},
+        extra={"k": 0},
+    )
+    assert isinstance(result, bool)
 
 
 def test_fit(bartmap_model):

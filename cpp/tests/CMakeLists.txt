@@ -218,3 +218,16 @@ add_test(
     NAME cvi_metrics_core_smoke
     COMMAND cvi_metrics_core_smoke
 )
+
+add_executable(bartmap_metrics_core_smoke
+    test_bartmap_metrics_core_smoke.cpp
+)
+
+target_link_libraries(bartmap_metrics_core_smoke
+    PRIVATE artlib_cpp_core
+)
+
+add_test(
+    NAME bartmap_metrics_core_smoke
+    COMMAND bartmap_metrics_core_smoke
+)

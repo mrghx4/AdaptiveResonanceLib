@@ -9,6 +9,7 @@ option(ARTLIB_CPP_BUILD_TESTS "Build C++ smoke tests" ON)
 
 add_library(artlib_cpp_core STATIC
     src/art2_core.cpp
+    src/bartmap_metrics_core.cpp
     src/cvi_metrics_core.cpp
     src/bayesian_art_core.cpp
     src/bayesian_artmap_core.cpp

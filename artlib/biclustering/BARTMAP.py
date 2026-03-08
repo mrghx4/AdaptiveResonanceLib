@@ -17,6 +17,15 @@ from artlib.common.BaseART import BaseART
 from sklearn.base import BaseEstimator, BiclusterMixin
 from scipy.stats import pearsonr
 
+try:
+    from artlib.optimized.backends.cpp.cppBARTMAPMetrics import (
+        AveragePearsonCorr,
+        AnyClusterMatch,
+    )
+except ImportError:  # pragma: no cover - optional acceleration module
+    AveragePearsonCorr = None
+    AnyClusterMatch = None
+
 
 class BARTMAP(BaseEstimator, BiclusterMixin):
     """BARTMAP for Biclustering.
@@ -267,6 +276,15 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             features in cluster `c_b`.
 
         """
+        if AveragePearsonCorr is not None:
+            try:
+                X_64 = np.ascontiguousarray(X, dtype=np.float64)
+                labels = np.ascontiguousarray(self.column_labels_, dtype=np.int32)
+                return float(AveragePearsonCorr(X_64, int(k), int(c_b), labels))
+            except Exception:
+                # Preserve Python/scipy implementation as authoritative fallback.
+                pass
+
         X_a = X[self.column_labels_ == c_b, :]
         if len(X_a) == 0:
             raise ValueError("X_a has length 0")
@@ -274,7 +292,6 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         mean_r = np.mean(
             [self._pearsonr(X_k_cb, self._get_x_cb(x_a_l, c_b)) for x_a_l in X_a]
         )
-
         return float(mean_r)
 
     def validate_data(self, X_a: np.ndarray, X_b: np.ndarray):
@@ -349,6 +366,23 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
 
         """
         k = extra["k"]
+        if AnyClusterMatch is not None:
+            try:
+                X_64 = np.ascontiguousarray(self.X, dtype=np.float64)
+                labels = np.ascontiguousarray(self.column_labels_, dtype=np.int32)
+                return bool(
+                    AnyClusterMatch(
+                        X_64,
+                        int(k),
+                        int(len(self.module_b.W)),
+                        float(self.params["eta"]),
+                        labels,
+                    )
+                )
+            except Exception:
+                # Preserve Python loop as authoritative fallback.
+                pass
+
         for cluster_b in range(len(self.module_b.W)):
             if self.match_criterion_bin(self.X, k, cluster_b, params):
                 return True
