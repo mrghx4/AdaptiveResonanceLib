@@ -42,7 +42,28 @@ class SimpleARTMAP(BaseARTMAP):
 
         """
         self.module_a = module_a
+        self._pending_cluster_b: Optional[int] = None
         super().__init__()
+
+    def _step_match_reset_func(
+        self,
+        i: np.ndarray,
+        w: np.ndarray,
+        cluster: int,
+        params: dict,
+        cache: Optional[dict] = None,
+    ) -> bool:
+        """Reusable callback for module_a.step_fit to avoid per-sample closures."""
+        cluster_b = self._pending_cluster_b
+        assert cluster_b is not None
+        return self.match_reset_func(
+            i,
+            w,
+            cluster,
+            params=params,
+            extra={"cluster_b": cluster_b},
+            cache=cache,
+        )
 
     def match_reset_func(
         self,
@@ -188,23 +209,16 @@ class SimpleARTMAP(BaseARTMAP):
             Side A cluster label.
 
         """
-        extra = {"cluster_b": c_b}
-
-        def match_reset_func(i, w, cluster, params, cache):
-            return self.match_reset_func(
-                i,
-                w,
-                cluster,
-                params=params,
-                extra=extra,
-                cache=cache,
+        self._pending_cluster_b = c_b
+        try:
+            c_a = self.module_a.step_fit(
+                x,
+                match_reset_func=self._step_match_reset_func,
+                match_tracking=match_tracking,
+                epsilon=epsilon,
             )
-        c_a = self.module_a.step_fit(
-            x,
-            match_reset_func=match_reset_func,
-            match_tracking=match_tracking,
-            epsilon=epsilon,
-        )
+        finally:
+            self._pending_cluster_b = None
         if c_a not in self.map:
             self.map[c_a] = c_b
         else:

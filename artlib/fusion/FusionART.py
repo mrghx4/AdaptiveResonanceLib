@@ -199,11 +199,11 @@ class FusionART(BaseART):
         skip = self._normalize_skip_channels(skip_channels)
         modules = self.modules
         idxs = self._channel_indices
-        activations = []
+        activation = 0.0
         caches: Dict[int, Dict] = {}
         for k in range(self.n):
             if k in skip:
-                activations.append(1.0)
+                activation += self._gamma_values[k]
                 caches[k] = {}
                 continue
             a_k, c_k = modules[k].category_choice(
@@ -211,10 +211,9 @@ class FusionART(BaseART):
                 modules[k].W[c_idx],
                 modules[k].params,
             )
-            activations.append(a_k)
+            activation += a_k * self._gamma_values[k]
             caches[k] = c_k
-        activation = float(np.dot(np.asarray(activations, dtype=float), self._gamma_values))
-        return activation, caches
+        return float(activation), caches
 
     def _match_criterion_bin_idx(
         self,
@@ -227,8 +226,8 @@ class FusionART(BaseART):
         skip = self._normalize_skip_channels(skip_channels)
         modules = self.modules
         idxs = self._channel_indices
-        m_bin = np.ones((self.n,), dtype=bool)
         caches: Dict[int, Dict] = {}
+        all_match = True
         for k in range(self.n):
             if k in skip:
                 caches[k] = {"match_criterion": np.inf}
@@ -240,9 +239,10 @@ class FusionART(BaseART):
                 cache[k],
                 op,
             )
-            m_bin[k] = mb_k
             caches[k] = c_k
-        return bool(np.all(m_bin)), caches
+            if not mb_k:
+                all_match = False
+        return all_match, caches
 
     def _update_idx(self, i: np.ndarray, c_idx: int, cache: Dict) -> list:
         modules = self.modules
@@ -358,11 +358,11 @@ class FusionART(BaseART):
         skip = self._normalize_skip_channels(skip_channels)
         modules = self.modules
         idxs = self._channel_indices
-        activations = []
+        activation = 0.0
         caches = {}
         for k in range(self.n):
             if k in skip:
-                activations.append(1.0)
+                activation += self._gamma_values[k]
                 caches[k] = {}
                 continue
             a_k, c_k = modules[k].category_choice(
@@ -370,9 +370,8 @@ class FusionART(BaseART):
                 w[k],
                 modules[k].params,
             )
-            activations.append(a_k)
+            activation += a_k * self._gamma_values[k]
             caches[k] = c_k
-        activation = float(np.dot(np.asarray(activations, dtype=float), self._gamma_values))
         cache = caches
         return activation, cache
 
@@ -464,8 +463,8 @@ class FusionART(BaseART):
         skip = self._normalize_skip_channels(skip_channels)
         modules = self.modules
         idxs = self._channel_indices
-        m_bin = np.ones((self.n,), dtype=bool)
         caches = {}
+        all_match = True
         for k in range(self.n):
             if k in skip:
                 caches[k] = {"match_criterion": np.inf}
@@ -477,9 +476,10 @@ class FusionART(BaseART):
                 cache[k],
                 op,
             )
-            m_bin[k] = mb_k
             caches[k] = c_k
-        return bool(np.all(m_bin)), caches
+            if not mb_k:
+                all_match = False
+        return all_match, caches
 
     def _match_tracking(
         self,
@@ -513,7 +513,9 @@ class FusionART(BaseART):
                 keep_searching_i = self.modules[i]._match_tracking(
                     cache[i], epsilon, params[i], method
                 )
-                keep_searching.append(keep_searching_i)
+                if not keep_searching_i:
+                    return False
+                keep_searching.append(True)
             else:
                 keep_searching.append(True)
         return all(keep_searching)
