@@ -97,9 +97,9 @@ class GaussianART(BaseART):
         cache = {"exp_dist_sig_dist": exp_dist_sig_dist}
         # ignore the (2*pi)^d term as that is constant
         p_i_cj = exp_dist_sig_dist / (params["alpha"] + sqrt_det_sig)
-        p_cj = n / sum(w_[-1] for w_ in self.W)
-
-        activation = p_i_cj * p_cj
+        # The global prior denominator is constant across all candidate clusters
+        # for a given sample, so we omit it from activation ranking.
+        activation = p_i_cj * n
 
         return activation, cache
 

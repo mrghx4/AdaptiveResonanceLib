@@ -324,4 +324,7 @@ class ARTMAP(SimpleARTMAP):
         check_is_fitted(self)
         C = self.predict(X, clip=clip)
         centers = self.module_b.get_cluster_centers()
+        centers_arr = np.asarray(centers)
+        if centers_arr.dtype != object and centers_arr.ndim >= 2:
+            return centers_arr[C]
         return np.array([centers[c] for c in C])
