@@ -142,3 +142,13 @@ def test_map_deep(deep_artmap_model):
         0, deep_artmap_model.layers[0].labels_a[0]
     )
     assert isinstance(mapped_label.tolist(), int)
+
+
+def test_map_deep_negative_level(deep_artmap_model):
+    X = [np.random.rand(10, 5), np.random.rand(10, 5)]
+    X_prep, _ = deep_artmap_model.prepare_data(X)
+    deep_artmap_model.fit(X_prep, max_iter=1)
+
+    y_last = deep_artmap_model.layers[-1].labels_a[0]
+    mapped = deep_artmap_model.map_deep(-1, y_last)
+    assert isinstance(mapped.tolist(), int)

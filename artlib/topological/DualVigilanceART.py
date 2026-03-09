@@ -309,12 +309,13 @@ class DualVigilanceART(BaseART):
             self.map[0] = 0
             return 0
         else:
+            base_mod = self.base_module
+            base_params_ref = base_mod.params
+            lb_params = dict(base_params_ref, **{"rho": self.rho_lower_bound})
             T_values, T_cache = zip(
                 *[
-                    self.base_module.category_choice(
-                        x, w, params=self.base_module.params
-                    )
-                    for w in self.base_module.W
+                    base_mod.category_choice(x, w, params=base_params_ref)
+                    for w in base_mod.W
                 ]
             )
             T = np.array(T_values)
@@ -331,12 +332,12 @@ class DualVigilanceART(BaseART):
                 order = np.array([], dtype=int)
 
             for c_ in order:
-                w = self.base_module.W[c_]
+                w = base_mod.W[c_]
                 cache = T_cache[c_]
-                m1, cache = self.base_module.match_criterion_bin(
+                m1, cache = base_mod.match_criterion_bin(
                     x,
                     w,
-                    params=self.base_module.params,
+                    params=base_params_ref,
                     cache=cache,
                     op=mt_operator,
                 )
@@ -344,31 +345,24 @@ class DualVigilanceART(BaseART):
                     x,
                     w,
                     self.map[c_],
-                    params=self.base_module.params,
+                    params=base_params_ref,
                     cache=cache,
                 )
 
                 if no_match_reset:
                     if m1:
-                        new_w = self.base_module.update(
-                            x, w, self.base_module.params, cache=cache
-                        )
-                        self.base_module.set_weight(c_, new_w)
+                        new_w = base_mod.update(x, w, base_params_ref, cache=cache)
+                        base_mod.set_weight(c_, new_w)
                         self._set_params(base_params)
                         return self.map[c_]
                     else:
-                        lb_params = dict(
-                            self.base_module.params, **{"rho": self.rho_lower_bound}
-                        )
-                        m2, _ = self.base_module.match_criterion_bin(
+                        m2, _ = base_mod.match_criterion_bin(
                             x, w, params=lb_params, cache=cache, op=mt_operator
                         )
                         if m2:
-                            c_new = len(self.base_module.W)
-                            w_new = self.base_module.new_weight(
-                                x, self.base_module.params
-                            )
-                            self.base_module.add_weight(w_new)
+                            c_new = len(base_mod.W)
+                            w_new = base_mod.new_weight(x, base_params_ref)
+                            base_mod.add_weight(w_new)
                             self.map[c_new] = self.map[c_]
                             self._set_params(base_params)
                             return self.map[c_new]
@@ -380,8 +374,8 @@ class DualVigilanceART(BaseART):
                         break
 
             c_new = len(self.base_module.W)
-            w_new = self.base_module.new_weight(x, self.base_module.params)
-            self.base_module.add_weight(w_new)
+            w_new = base_mod.new_weight(x, base_params_ref)
+            base_mod.add_weight(w_new)
             self.map[c_new] = max(self.map.values()) + 1
             self._set_params(base_params)
             return self.map[c_new]

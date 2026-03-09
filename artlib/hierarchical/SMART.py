@@ -88,8 +88,7 @@ class SMART(DeepARTMAP):
             Prepared data.
 
         """
-        X_, _ = super(SMART, self).prepare_data([X] * self.n_modules)
-        return X_[0]
+        return self.modules[0].prepare_data(X)
 
     def restore_data(
         self, X: Union[np.ndarray, list[np.ndarray]], y: Optional[np.ndarray] = None
@@ -107,8 +106,7 @@ class SMART(DeepARTMAP):
             Restored data.
 
         """
-        X_, _ = super(SMART, self).restore_data([X] * self.n_modules)
-        return X_[0]
+        return self.modules[0].restore_data(X)
 
     def fit(
         self,

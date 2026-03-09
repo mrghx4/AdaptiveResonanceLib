@@ -135,3 +135,24 @@ def test_falcon_get_rewards(falcon_model):
     predicted_rewards = falcon_model.get_rewards(states_prep, actions_prep)
 
     assert predicted_rewards.shape == rewards.shape
+
+
+def test_get_actions_and_rewards_uses_single_predict_call(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    calls = {"n": 0}
+    orig_predict = falcon_model.fusion_art.predict
+
+    def _predict_once(*args, **kwargs):
+        calls["n"] += 1
+        return orig_predict(*args, **kwargs)
+
+    monkeypatch.setattr(falcon_model.fusion_art, "predict", _predict_once)
+    falcon_model.get_actions_and_rewards(states_prep[0, :])
+    assert calls["n"] == 1

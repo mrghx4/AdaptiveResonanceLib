@@ -187,11 +187,10 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         """
         if level < 0:
             level += len(self.layers)
-        y_b = self.layers[level].map_a2b(y_a)
-        if level > 0:
-            return self.map_deep(level - 1, y_b)
-        else:
-            return y_b
+        y_b = y_a
+        for i in range(level, -1, -1):
+            y_b = self.layers[i].map_a2b(y_b)
+        return y_b
 
     def validate_data(self, X: list[np.ndarray], y: Optional[np.ndarray] = None):
         """Validate the data before clustering.
@@ -291,9 +290,10 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
 
         """
         self.validate_data(X, y)
+        modules = self.modules
         if y is not None:
             self.is_supervised = True
-            self.layers = [SimpleARTMAP(self.modules[i]) for i in range(self.n_modules)]
+            self.layers = [SimpleARTMAP(modules[i]) for i in range(self.n_modules)]
             self.layers[0] = self.layers[0].fit(
                 X[0],
                 y,
@@ -307,10 +307,10 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
                 self.n_modules >= 2
             ), "Must provide at least two ART modules when providing cluster labels"
             self.layers = cast(
-                list[BaseARTMAP], [ARTMAP(self.modules[1], self.modules[0])]
+                list[BaseARTMAP], [ARTMAP(modules[1], modules[0])]
             ) + cast(
                 list[BaseARTMAP],
-                [SimpleARTMAP(self.modules[i]) for i in range(2, self.n_modules)],
+                [SimpleARTMAP(modules[i]) for i in range(2, self.n_modules)],
             )
             self.layers[0] = self.layers[0].fit(
                 X[1],
@@ -320,9 +320,10 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
                 epsilon=epsilon,
             )
 
-        for art_i in range(1, self.n_layers):
-            y_i = self.layers[art_i - 1].labels_a
-            self.layers[art_i] = self.layers[art_i].fit(
+        layers = self.layers
+        for art_i in range(1, len(layers)):
+            y_i = layers[art_i - 1].labels_a
+            layers[art_i] = layers[art_i].fit(
                 X[art_i],
                 y_i,
                 max_iter=max_iter,
@@ -359,12 +360,11 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
 
         """
         self.validate_data(X, y)
+        modules = self.modules
         if y is not None:
             if len(self.layers) == 0:
                 self.is_supervised = True
-                self.layers = [
-                    SimpleARTMAP(self.modules[i]) for i in range(self.n_modules)
-                ]
+                self.layers = [SimpleARTMAP(modules[i]) for i in range(self.n_modules)]
             assert self.is_supervised, (
                 "Labels were previously provided. "
                 "Must continue to provide labels for partial fit."
@@ -380,10 +380,10 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
                     self.n_modules >= 2
                 ), "Must provide at least two ART modules when providing cluster labels"
                 self.layers = cast(
-                    list[BaseARTMAP], [ARTMAP(self.modules[1], self.modules[0])]
+                    list[BaseARTMAP], [ARTMAP(modules[1], modules[0])]
                 ) + cast(
                     list[BaseARTMAP],
-                    [SimpleARTMAP(self.modules[i]) for i in range(2, self.n_modules)],
+                    [SimpleARTMAP(modules[i]) for i in range(2, self.n_modules)],
                 )
             assert not self.is_supervised, (
                 "Labels were not previously provided. "
@@ -399,9 +399,10 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             x_i = 2
 
         n_samples = X[0].shape[0]
-        for art_i in range(1, self.n_layers):
-            y_i = self.layers[art_i - 1].labels_a[-n_samples:]
-            self.layers[art_i] = self.layers[art_i].partial_fit(
+        layers = self.layers
+        for art_i in range(1, len(layers)):
+            y_i = layers[art_i - 1].labels_a[-n_samples:]
+            layers[art_i] = layers[art_i].partial_fit(
                 X[x_i],
                 y_i,
                 match_tracking=match_tracking,

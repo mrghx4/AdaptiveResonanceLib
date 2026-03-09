@@ -118,3 +118,17 @@ def test_prune(topoart_model):
     assert (
         len(topoart_model.W) == 4
     )  # W should have 4 remaining weights after pruning
+
+
+def test_prune_is_silent(topoart_model, capsys):
+    np.random.seed(1)
+    X = np.random.rand(8, 2)
+    topoart_model.base_module.W = [np.random.rand(2) for _ in range(3)]
+    topoart_model.weight_sample_counter_ = [1, 6, 7]
+    topoart_model._permanent_mask = np.zeros((3,), dtype=bool)
+    topoart_model.adjacency = np.random.randint(0, 10, (3, 3))
+    topoart_model.labels_ = np.random.randint(0, 3, (8,))
+
+    topoart_model.prune(X)
+    captured = capsys.readouterr()
+    assert captured.out == ""

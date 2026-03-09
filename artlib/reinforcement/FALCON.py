@@ -62,6 +62,7 @@ class FALCON:
             gamma_values=gamma_values,
             channel_dims=channel_dims,
         )
+        self._reward_skip_channel = [2]
 
     def prepare_data(
         self, states: np.ndarray, actions: np.ndarray, rewards: np.ndarray
@@ -182,14 +183,14 @@ class FALCON:
             action_space = self.fusion_art.get_channel_centers(1)
             action_space = np.array(action_space)
         action_space_prepared = self.fusion_art.modules[1].prepare_data(action_space)
-        viable_clusters = []
-        for action in action_space_prepared:
-            data = self.fusion_art.join_channel_data(
-                [state.reshape(1, -1), action.reshape(1, -1)], skip_channels=[2]
-            )
-            c = self.fusion_art.predict(data, skip_channels=[2])
-            viable_clusters.append(c[0])
-
+        n_actions = action_space_prepared.shape[0]
+        state_batch = np.repeat(state.reshape(1, -1), n_actions, axis=0)
+        data = self.fusion_art.join_channel_data(
+            [state_batch, action_space_prepared], skip_channels=self._reward_skip_channel
+        )
+        viable_clusters = self.fusion_art.predict(
+            data, skip_channels=self._reward_skip_channel
+        )
         rewards = [reward_centers[c] for c in viable_clusters]
 
         return action_space, np.array(rewards)
@@ -254,7 +255,7 @@ class FALCON:
         action_space, rewards = self.get_actions_and_rewards(state, action_space)
         action_indices = np.array(range(len(action_space)))
 
-        reward_dist = rewards
+        reward_dist = np.array(rewards, dtype=float, copy=True)
         reward_dist /= np.sum(reward_dist)
         reward_dist = reward_dist.reshape((-1,))
 
@@ -284,8 +285,10 @@ class FALCON:
 
         """
         reward_centers = self.fusion_art.get_channel_centers(2)
-        data = self.fusion_art.join_channel_data([states, actions], skip_channels=[2])
-        C = self.fusion_art.predict(data, skip_channels=[2])
+        data = self.fusion_art.join_channel_data(
+            [states, actions], skip_channels=self._reward_skip_channel
+        )
+        C = self.fusion_art.predict(data, skip_channels=self._reward_skip_channel)
         return np.array([reward_centers[c] for c in C])
 
 

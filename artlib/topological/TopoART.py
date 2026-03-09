@@ -320,21 +320,8 @@ class TopoART(BaseART):
             The input dataset.
 
         """
-        a = (
-            np.array(self.weight_sample_counter_).reshape(
-                -1,
-            )
-            >= self.phi
-        )
-        b = self._permanent_mask
-        print(a.shape, b.shape)
-
-        self._permanent_mask += (
-            np.array(self.weight_sample_counter_).reshape(
-                -1,
-            )
-            >= self.phi
-        )
+        counts = np.asarray(self.weight_sample_counter_).reshape(-1)
+        self._permanent_mask |= counts >= self.phi
         perm_labels = np.where(self._permanent_mask)[0]
 
         self.W = [w for w, pm in zip(self.W, self._permanent_mask) if pm]
@@ -344,11 +331,7 @@ class TopoART(BaseART):
         self.adjacency = self.adjacency[perm_labels][:, perm_labels]
         self._permanent_mask = self._permanent_mask[perm_labels]
 
-        label_map = {
-            label: np.where(perm_labels == label)[0][0]
-            for label in np.unique(self.labels_)
-            if label in perm_labels
-        }
+        label_map = {old: new for new, old in enumerate(perm_labels)}
 
         for i, x in enumerate(X):
             if self.labels_[i] in label_map:
@@ -485,8 +468,16 @@ class TopoART(BaseART):
                 ]
             )
             T = np.array(T_values)
-            while any(~np.isnan(T)):
-                c_ = int(np.nanargmax(T))
+            valid = ~np.isnan(T)
+            if np.any(valid):
+                idx = np.arange(T.shape[0])[valid]
+                T_valid = T[valid]
+                order = idx[np.lexsort((idx, -T_valid))]
+            else:
+                order = np.array([], dtype=int)
+
+            for c_idx in order:
+                c_ = int(c_idx)
                 w = self.W[c_]
                 cache = T_cache[c_]
                 m, cache = self.match_criterion_bin(
@@ -520,18 +511,15 @@ class TopoART(BaseART):
                     self.set_weight(c_, new_w)
                     if resonant_c < 0:
                         resonant_c = c_
-                        T[c_] = np.nan
                     else:
                         self._set_params(base_params)
                         return resonant_c
-                else:
-                    T[c_] = np.nan
-                    if not no_match_reset:
-                        keep_searching = self._match_tracking(
-                            cache, epsilon, self.params, match_tracking
-                        )
-                        if not keep_searching:
-                            T[:] = np.nan
+                elif not no_match_reset:
+                    keep_searching = self._match_tracking(
+                        cache, epsilon, self.params, match_tracking
+                    )
+                    if not keep_searching:
+                        break
 
             self._set_params(base_params)
             if resonant_c < 0:
