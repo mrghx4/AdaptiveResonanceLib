@@ -188,14 +188,17 @@ class SimpleARTMAP(BaseARTMAP):
             Side A cluster label.
 
         """
-        match_reset_func = lambda i, w, cluster, params, cache: self.match_reset_func(
-            i,
-            w,
-            cluster,
-            params=params,
-            extra={"cluster_b": c_b},
-            cache=cache,
-        )
+        extra = {"cluster_b": c_b}
+
+        def match_reset_func(i, w, cluster, params, cache):
+            return self.match_reset_func(
+                i,
+                w,
+                cluster,
+                params=params,
+                extra=extra,
+                cache=cache,
+            )
         c_a = self.module_a.step_fit(
             x,
             match_reset_func=match_reset_func,
@@ -250,30 +253,33 @@ class SimpleARTMAP(BaseARTMAP):
         self.classes_ = unique_labels(y)
         self.labels_ = y
         # init module A
-        self.module_a.W = []
-        self.module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
+        module_a = self.module_a
+        module_a.W = []
+        module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
+        labels_a = module_a.labels_
+        n_samples = X.shape[0]
 
         for _ in range(max_iter):
             if verbose:
                 from tqdm import tqdm
 
-                x_y_iter = tqdm(
-                    enumerate(zip(X, y)),
-                    total=int(X.shape[0]),
+                sample_iter = tqdm(
+                    range(n_samples),
+                    total=n_samples,
                     leave=leave_progress_bar,
                 )
             else:
-                x_y_iter = enumerate(zip(X, y))
-            for i, (x, c_b) in x_y_iter:
-                self.module_a.pre_step_fit(X)
+                sample_iter = range(n_samples)
+            for i in sample_iter:
+                module_a.pre_step_fit(X)
                 c_a = self.step_fit(
-                    x,
-                    c_b,
+                    X[i],
+                    y[i],
                     match_tracking=match_tracking,
                     epsilon=epsilon,
                 )
-                self.module_a.labels_[i] = c_a
-                self.module_a.post_step_fit(X)
+                labels_a[i] = c_a
+                module_a.post_step_fit(X)
         return self
 
     def fit_predict(
@@ -493,23 +499,28 @@ class SimpleARTMAP(BaseARTMAP):
 
         """
         SimpleARTMAP.validate_data(self, X, y)
+        module_a = self.module_a
         if not hasattr(self, "labels_"):
             self.labels_ = y
-            self.module_a.W = []
-            self.module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
+            module_a.W = []
+            module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
             j = 0
         else:
             j = len(self.labels_)
             self.labels_ = np.pad(self.labels_, [(0, X.shape[0])], mode="constant")
             self.labels_[j:] = y
-            self.module_a.labels_ = np.pad(
-                self.module_a.labels_, [(0, X.shape[0])], mode="constant"
+            module_a.labels_ = np.pad(
+                module_a.labels_, [(0, X.shape[0])], mode="constant"
             )
-        for i, (x, c_b) in enumerate(zip(X, y)):
-            self.module_a.pre_step_fit(X)
-            c_a = self.step_fit(x, c_b, match_tracking=match_tracking, epsilon=epsilon)
-            self.module_a.labels_[i + j] = c_a
-            self.module_a.post_step_fit(X)
+        labels_a = module_a.labels_
+        n_samples = X.shape[0]
+        for i in range(n_samples):
+            module_a.pre_step_fit(X)
+            c_a = self.step_fit(
+                X[i], y[i], match_tracking=match_tracking, epsilon=epsilon
+            )
+            labels_a[i + j] = c_a
+            module_a.post_step_fit(X)
         return self
 
     @property
@@ -624,10 +635,12 @@ class SimpleARTMAP(BaseARTMAP):
             X = np.clip(X, self.module_a.d_min_, self.module_a.d_max_)
         self.module_a.validate_data(X)
         self.module_a.check_dimensions(X)
-        y_b = np.zeros((X.shape[0],), dtype=int)
+        module_a = self.module_a
+        map_ab = self.map
+        y_b = np.empty((X.shape[0],), dtype=int)
         for i, x in enumerate(X):
-            c_a, c_b = self.step_pred(x)
-            y_b[i] = c_b
+            c_a = module_a.step_pred(x)
+            y_b[i] = map_ab[c_a]
         return y_b
 
     def predict_ab(
@@ -653,12 +666,14 @@ class SimpleARTMAP(BaseARTMAP):
             X = np.clip(X, self.module_a.d_min_, self.module_a.d_max_)
         self.module_a.validate_data(X)
         self.module_a.check_dimensions(X)
-        y_a = np.zeros((X.shape[0],), dtype=int)
-        y_b = np.zeros((X.shape[0],), dtype=int)
+        module_a = self.module_a
+        map_ab = self.map
+        y_a = np.empty((X.shape[0],), dtype=int)
+        y_b = np.empty((X.shape[0],), dtype=int)
         for i, x in enumerate(X):
-            c_a, c_b = self.step_pred(x)
+            c_a = module_a.step_pred(x)
             y_a[i] = c_a
-            y_b[i] = c_b
+            y_b[i] = map_ab[c_a]
         return y_a, y_b
 
     def plot_cluster_bounds(
