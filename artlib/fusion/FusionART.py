@@ -190,6 +190,73 @@ class FusionART(BaseART):
     def _cluster_weight(self, c_idx: int) -> list:
         return [self.modules[k].W[c_idx] for k in range(self.n)]
 
+    def _category_choice_idx(
+        self,
+        i: np.ndarray,
+        c_idx: int,
+        skip_channels: Optional[List[int]] = None,
+    ) -> Tuple[float, Dict]:
+        skip = self._normalize_skip_channels(skip_channels)
+        modules = self.modules
+        idxs = self._channel_indices
+        activations = []
+        caches: Dict[int, Dict] = {}
+        for k in range(self.n):
+            if k in skip:
+                activations.append(1.0)
+                caches[k] = {}
+                continue
+            a_k, c_k = modules[k].category_choice(
+                i[idxs[k][0] : idxs[k][1]],
+                modules[k].W[c_idx],
+                modules[k].params,
+            )
+            activations.append(a_k)
+            caches[k] = c_k
+        activation = float(np.dot(np.asarray(activations, dtype=float), self._gamma_values))
+        return activation, caches
+
+    def _match_criterion_bin_idx(
+        self,
+        i: np.ndarray,
+        c_idx: int,
+        cache: Dict,
+        op: Callable = operator.ge,
+        skip_channels: Optional[List[int]] = None,
+    ) -> Tuple[bool, Dict]:
+        skip = self._normalize_skip_channels(skip_channels)
+        modules = self.modules
+        idxs = self._channel_indices
+        m_bin = np.ones((self.n,), dtype=bool)
+        caches: Dict[int, Dict] = {}
+        for k in range(self.n):
+            if k in skip:
+                caches[k] = {"match_criterion": np.inf}
+                continue
+            mb_k, c_k = modules[k].match_criterion_bin(
+                i[idxs[k][0] : idxs[k][1]],
+                modules[k].W[c_idx],
+                modules[k].params,
+                cache[k],
+                op,
+            )
+            m_bin[k] = mb_k
+            caches[k] = c_k
+        return bool(np.all(m_bin)), caches
+
+    def _update_idx(self, i: np.ndarray, c_idx: int, cache: Dict) -> list:
+        modules = self.modules
+        idxs = self._channel_indices
+        return [
+            modules[k].update(
+                i[idxs[k][0] : idxs[k][1]],
+                modules[k].W[c_idx],
+                modules[k].params,
+                cache[k],
+            )
+            for k in range(self.n)
+        ]
+
     def _normalize_skip_channels(self, skip_channels: Optional[List[int]]) -> set[int]:
         if not skip_channels:
             return set()
@@ -510,21 +577,20 @@ class FusionART(BaseART):
             self.add_weight(w_new)
             return 0
         else:
-            weights = [self._cluster_weight(c_) for c_ in range(n_categories)]
             if match_tracking in ["MT~"] and match_reset_func is not None:
                 T_values, T_cache = zip(
                     *[
-                        self.category_choice(x, w, params=self.params)
+                        self._category_choice_idx(x, c_)
                         if match_reset_func(x, w, c_, params=self.params, cache=None)
                         else (np.nan, None)
-                        for c_, w in enumerate(weights)
+                        for c_, w in ((c_, self._cluster_weight(c_)) for c_ in range(n_categories))
                     ]
                 )
             else:
                 T_values, T_cache = zip(
                     *[
-                        self.category_choice(x, w, params=self.params)
-                        for w in weights
+                        self._category_choice_idx(x, c_)
+                        for c_ in range(n_categories)
                     ]
                 )
             T = np.array(T_values)
@@ -542,21 +608,21 @@ class FusionART(BaseART):
 
             for c_idx in order:
                 c_ = int(c_idx)
-                w = weights[c_]
                 cache = T_cache[c_]
-                m, cache = self.match_criterion_bin(
-                    x, w, params=self.params, cache=cache, op=mt_operator
+                m, cache = self._match_criterion_bin_idx(
+                    x, c_, cache=cache, op=mt_operator
                 )
 
                 if match_tracking in ["MT~"] and match_reset_func is not None:
                     no_match_reset = True
                 else:
+                    w = self._cluster_weight(c_)
                     no_match_reset = match_reset_func is None or match_reset_func(
                         x, w, c_, params=self.params, cache=cache
                     )
 
                 if m and no_match_reset:
-                    self.set_weight(c_, self.update(x, w, self.params, cache=cache))
+                    self.set_weight(c_, self._update_idx(x, c_, cache))
                     self._set_params(base_params)
                     return c_
                 keep_searching = self._match_tracking(
@@ -633,10 +699,9 @@ class FusionART(BaseART):
         assert n_categories > 0, "ART module is not fit."
         T, _ = zip(
             *[
-                self.category_choice(
+                self._category_choice_idx(
                     x,
-                    self._cluster_weight(c_),
-                    params=self.params,
+                    c_,
                     skip_channels=skip_channels,
                 )
                 for c_ in range(n_categories)
