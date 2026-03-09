@@ -459,6 +459,7 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
 
         """
         match_state: dict = {}
+        extra = {"k": k, "match_state": match_state}
 
         def match_reset_func(i, w, cluster, params, cache):
             return self.match_reset_func(
@@ -466,7 +467,7 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
                 w,
                 cluster,
                 params=params,
-                extra={"k": k, "match_state": match_state},
+                extra=extra,
                 cache=cache,
             )
 
@@ -497,32 +498,27 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self.module_b = self.module_b.fit(X_b, max_iter=max_iter)
         self._module_b_n_clusters_cached = len(self.module_b.W)
         self._ensure_cpp_metric_cache(self.X)
+        n_col_clusters = self.module_b.n_clusters
 
         # init module A
-        self.module_a.W = []
-        self.module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
+        module_a = self.module_a
+        module_a.W = []
+        module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
 
         for _ in range(max_iter):
             for k in range(n):
-                self.module_a.pre_step_fit(X_a)
+                module_a.pre_step_fit(X_a)
                 c_a = self.step_fit(X_a, k)
-                self.module_a.labels_[k] = c_a
-                self.module_a.post_step_fit(X_a)
+                module_a.labels_[k] = c_a
+                module_a.post_step_fit(X_a)
 
-        self.rows_ = np.vstack(
-            [
-                self.row_labels_ == label
-                for label in range(self.module_a.n_clusters)
-                for _ in range(self.module_b.n_clusters)
-            ]
-        )
-        self.columns_ = np.vstack(
-            [
-                self.column_labels_ == label
-                for _ in range(self.module_a.n_clusters)
-                for label in range(self.module_b.n_clusters)
-            ]
-        )
+        n_row_clusters = module_a.n_clusters
+        row_labels = self.row_labels_
+        col_labels = self.column_labels_
+        row_mask = row_labels[np.newaxis, :] == np.arange(n_row_clusters)[:, np.newaxis]
+        col_mask = col_labels[np.newaxis, :] == np.arange(n_col_clusters)[:, np.newaxis]
+        self.rows_ = np.repeat(row_mask, n_col_clusters, axis=0)
+        self.columns_ = np.tile(col_mask, (n_row_clusters, 1))
         return self
 
     def visualize(self, cmap: Optional[Colormap] = None):

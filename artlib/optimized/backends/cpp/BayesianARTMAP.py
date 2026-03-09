@@ -25,6 +25,32 @@ class BayesianARTMAP(SimpleARTMAP):
         module_a = BayesianART(rho=rho, cov_init=cov_init)
         super().__init__(module_a)
         self._cov_init = cov_init
+        self._cpp_predict_weights = None
+        self._cpp_predict_cluster_labels = None
+        self._cpp_predict_signature = None
+
+    def _invalidate_cpp_predict_cache(self):
+        self._cpp_predict_weights = None
+        self._cpp_predict_cluster_labels = None
+        self._cpp_predict_signature = None
+
+    def _predict_cache_signature(self) -> tuple[int, int]:
+        return (len(self.module_a.W), len(self.map))
+
+    def _get_cpp_predict_buffers(self) -> tuple[np.ndarray, np.ndarray]:
+        sig = self._predict_cache_signature()
+        if (
+            self._cpp_predict_weights is None
+            or self._cpp_predict_cluster_labels is None
+            or self._cpp_predict_signature != sig
+        ):
+            self._cpp_predict_weights = np.ascontiguousarray(self.module_a.W, dtype=float)
+            self._cpp_predict_cluster_labels = np.ascontiguousarray(
+                [self.map[c] for c in range(self.module_a.n_clusters)],
+                dtype=np.int32,
+            )
+            self._cpp_predict_signature = sig
+        return self._cpp_predict_weights, self._cpp_predict_cluster_labels
 
     def _synchronize_cpp_results(
         self,
@@ -57,6 +83,7 @@ class BayesianARTMAP(SimpleARTMAP):
                 assert self.map[c_a] == c_b, "Incremental fit changed cluster map."
             else:
                 self.map[c_a] = int(c_b)
+        self._invalidate_cpp_predict_cache()
 
     def fit(
         self,
@@ -136,8 +163,7 @@ class BayesianARTMAP(SimpleARTMAP):
         self.module_a.validate_data(X_)
         self.module_a.check_dimensions(X_)
 
-        W = np.ascontiguousarray(self.module_a.W, dtype=float)
-        cl = np.ascontiguousarray([self.map[c] for c in range(self.module_a.n_clusters)])
+        W, cl = self._get_cpp_predict_buffers()
         _, y_b = PredictBayesianARTMAP(
             X_,
             rho=self.module_a.params["rho"],
@@ -157,8 +183,7 @@ class BayesianARTMAP(SimpleARTMAP):
         self.module_a.validate_data(X_)
         self.module_a.check_dimensions(X_)
 
-        W = np.ascontiguousarray(self.module_a.W, dtype=float)
-        cl = np.ascontiguousarray([self.map[c] for c in range(self.module_a.n_clusters)])
+        W, cl = self._get_cpp_predict_buffers()
         y_a, y_b = PredictBayesianARTMAP(
             X_,
             rho=self.module_a.params["rho"],

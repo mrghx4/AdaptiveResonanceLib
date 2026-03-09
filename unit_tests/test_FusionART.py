@@ -126,6 +126,15 @@ def test_step_pred(fusionart_model):
     assert isinstance(label, int)  # Ensure the result is an integer
 
 
+def test_step_pred_raises_when_unfit(fusionart_model):
+    X = [np.random.rand(10, 2), np.random.rand(10, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.modules[0].W = []
+    fusionart_model.modules[1].W = []
+    with pytest.raises(AssertionError):
+        fusionart_model.step_pred(X_prep[0])
+
+
 def test_predict_regression(fusionart_model):
     # Test the predict_regression method
     X = [np.random.rand(10, 2), np.random.rand(10, 2)]

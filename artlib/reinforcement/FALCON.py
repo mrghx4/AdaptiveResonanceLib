@@ -63,6 +63,39 @@ class FALCON:
             channel_dims=channel_dims,
         )
         self._reward_skip_channel = [2]
+        self._reward_centers_cache: Optional[np.ndarray] = None
+        self._reward_centers_sig: Optional[int] = None
+        self._action_space_cache: Optional[np.ndarray] = None
+        self._action_space_prepared_cache: Optional[np.ndarray] = None
+        self._action_space_sig: Optional[int] = None
+
+    def _reward_centers_array(self) -> np.ndarray:
+        sig = len(self.fusion_art.modules[2].W)
+        if self._reward_centers_cache is None or self._reward_centers_sig != sig:
+            self._reward_centers_cache = np.asarray(self.fusion_art.get_channel_centers(2))
+            self._reward_centers_sig = sig
+        return self._reward_centers_cache
+
+    def _default_action_space(self) -> tuple[np.ndarray, np.ndarray]:
+        sig = len(self.fusion_art.modules[1].W)
+        if (
+            self._action_space_cache is None
+            or self._action_space_prepared_cache is None
+            or self._action_space_sig != sig
+        ):
+            self._action_space_cache = np.asarray(self.fusion_art.get_channel_centers(1))
+            self._action_space_prepared_cache = self.fusion_art.modules[1].prepare_data(
+                self._action_space_cache
+            )
+            self._action_space_sig = sig
+        return self._action_space_cache, self._action_space_prepared_cache
+
+    def _invalidate_center_caches(self):
+        self._reward_centers_cache = None
+        self._reward_centers_sig = None
+        self._action_space_cache = None
+        self._action_space_prepared_cache = None
+        self._action_space_sig = None
 
     def prepare_data(
         self, states: np.ndarray, actions: np.ndarray, rewards: np.ndarray
@@ -136,6 +169,7 @@ class FALCON:
         """
         data = self.fusion_art.join_channel_data([states, actions, rewards])
         self.fusion_art = self.fusion_art.fit(data)
+        self._invalidate_center_caches()
         return self
 
     def partial_fit(self, states: np.ndarray, actions: np.ndarray, rewards: np.ndarray):
@@ -158,6 +192,7 @@ class FALCON:
         """
         data = self.fusion_art.join_channel_data([states, actions, rewards])
         self.fusion_art = self.fusion_art.partial_fit(data)
+        self._invalidate_center_caches()
         return self
 
     def get_actions_and_rewards(
@@ -178,11 +213,12 @@ class FALCON:
             The possible actions and their corresponding rewards.
 
         """
-        reward_centers = self.fusion_art.get_channel_centers(2)
+        reward_centers_arr = self._reward_centers_array()
         if action_space is None:
-            action_space = self.fusion_art.get_channel_centers(1)
-            action_space = np.array(action_space)
-        action_space_prepared = self.fusion_art.modules[1].prepare_data(action_space)
+            action_space, action_space_prepared = self._default_action_space()
+        else:
+            action_space = np.asarray(action_space)
+            action_space_prepared = self.fusion_art.modules[1].prepare_data(action_space)
         n_actions = action_space_prepared.shape[0]
         state_batch = np.repeat(state.reshape(1, -1), n_actions, axis=0)
         data = self.fusion_art.join_channel_data(
@@ -191,9 +227,9 @@ class FALCON:
         viable_clusters = self.fusion_art.predict(
             data, skip_channels=self._reward_skip_channel
         )
-        rewards = [reward_centers[c] for c in viable_clusters]
+        rewards = reward_centers_arr[viable_clusters]
 
-        return action_space, np.array(rewards)
+        return action_space, rewards
 
     def get_action(
         self,
@@ -256,7 +292,11 @@ class FALCON:
         action_indices = np.array(range(len(action_space)))
 
         reward_dist = np.array(rewards, dtype=float, copy=True)
-        reward_dist /= np.sum(reward_dist)
+        total = np.sum(reward_dist)
+        if total <= 0:
+            reward_dist = np.full_like(reward_dist, 1.0 / max(1, reward_dist.size))
+        else:
+            reward_dist /= total
         reward_dist = reward_dist.reshape((-1,))
 
         if optimality == "min":
@@ -284,12 +324,12 @@ class FALCON:
             The rewards corresponding to the given state-action pairs.
 
         """
-        reward_centers = self.fusion_art.get_channel_centers(2)
+        reward_centers = self._reward_centers_array()
         data = self.fusion_art.join_channel_data(
             [states, actions], skip_channels=self._reward_skip_channel
         )
         C = self.fusion_art.predict(data, skip_channels=self._reward_skip_channel)
-        return np.array([reward_centers[c] for c in C])
+        return reward_centers[C]
 
 
 class TD_FALCON(FALCON):
@@ -396,7 +436,7 @@ class TD_FALCON(FALCON):
                 rewards_dcc[:-1] + self.td_lambda * Q[1:] - Q[:-1]
             )
             # ensure SARSA values are between 0 and 1
-            sarsa_rewards = np.maximum(np.minimum(sarsa_rewards, 1.0), 0.0)
+            sarsa_rewards = np.clip(sarsa_rewards, 0.0, 1.0)
             # complement code rewards
             sarsa_rewards_fit = complement_code(sarsa_rewards)
             # we cant train on the final state because no rewards are generated after it
@@ -446,4 +486,5 @@ class TD_FALCON(FALCON):
             [states_fit, actions_fit, sarsa_rewards_fit]
         )
         self.fusion_art = self.fusion_art.partial_fit(data)
+        self._invalidate_center_caches()
         return self

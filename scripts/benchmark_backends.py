@@ -9,6 +9,7 @@ import os
 import warnings
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from statistics import median
 from time import perf_counter
 from typing import Any, Callable
 
@@ -93,6 +94,8 @@ def benchmark_case(
     n_features: int,
     n_classes: int,
     seed: int,
+    repeats: int,
+    warmup: int,
 ) -> list[dict[str, Any]]:
     if case.binary_input:
         x_train, y_train, x_test, y_test = build_binary_data(
@@ -107,60 +110,146 @@ def benchmark_case(
     rows: list[dict[str, Any]] = []
 
     for backend in case.backends:
-        row: dict[str, Any] = {
-            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-            "model": case.name,
-            "backend_requested": backend,
-            "backend_actual": "",
-            "status": "ok",
-            "prepare_s": "",
-            "fit_s": "",
-            "predict_s": "",
-            "total_s": "",
-            "n_train": n_train,
-            "n_test": n_test,
-            "n_features": n_features,
-            "n_classes": n_classes,
-            "seed": seed,
-            "notes": "",
-        }
-        t0 = perf_counter()
+        notes = ""
         try:
             with warnings.catch_warnings(record=True) as rec:
                 warnings.simplefilter("always")
                 model = case.factory(backend=backend, **case.kwargs_builder(n_features))
-            row["backend_actual"] = detect_backend(model)
+            backend_actual = detect_backend(model)
             if rec:
-                row["notes"] = " | ".join(str(w.message) for w in rec)
-
-            p0 = perf_counter()
-            x_prepared = model.prepare_data(x_full)
-            p1 = perf_counter()
-            row["prepare_s"] = f"{(p1 - p0):.6f}"
-
-            x_train_p = x_prepared[:n_train]
-            x_test_p = x_prepared[n_train:]
-
-            f0 = perf_counter()
-            if case.kind == "artmap":
-                model.fit(x_train_p, y_train)
-            else:
-                model.fit(x_train_p)
-            f1 = perf_counter()
-            row["fit_s"] = f"{(f1 - f0):.6f}"
-
-            y0 = perf_counter()
-            _ = model.predict(x_test_p)
-            y1 = perf_counter()
-            row["predict_s"] = f"{(y1 - y0):.6f}"
-            row["total_s"] = f"{(perf_counter() - t0):.6f}"
+                notes = " | ".join(str(w.message) for w in rec)
         except Exception as exc:
-            row["status"] = "error"
-            row["backend_actual"] = "unknown"
-            row["notes"] = f"{type(exc).__name__}: {exc}"
-            row["total_s"] = f"{(perf_counter() - t0):.6f}"
+            rows.append(
+                {
+                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                    "model": case.name,
+                    "backend_requested": backend,
+                    "backend_actual": "unknown",
+                    "status": "error",
+                    "repeat_idx": "",
+                    "prepare_s": "",
+                    "fit_s": "",
+                    "predict_s": "",
+                    "total_s": "",
+                    "prepare_median_s": "",
+                    "fit_median_s": "",
+                    "predict_median_s": "",
+                    "total_median_s": "",
+                    "n_train": n_train,
+                    "n_test": n_test,
+                    "n_features": n_features,
+                    "n_classes": n_classes,
+                    "seed": seed,
+                    "notes": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            continue
 
-        rows.append(row)
+        rep_prepare: list[float] = []
+        rep_fit: list[float] = []
+        rep_predict: list[float] = []
+        rep_total: list[float] = []
+
+        total_runs = warmup + repeats
+        for run_idx in range(total_runs):
+            row: dict[str, Any] = {
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "model": case.name,
+                "backend_requested": backend,
+                "backend_actual": backend_actual,
+                "status": "ok",
+                "repeat_idx": "",
+                "prepare_s": "",
+                "fit_s": "",
+                "predict_s": "",
+                "total_s": "",
+                "prepare_median_s": "",
+                "fit_median_s": "",
+                "predict_median_s": "",
+                "total_median_s": "",
+                "n_train": n_train,
+                "n_test": n_test,
+                "n_features": n_features,
+                "n_classes": n_classes,
+                "seed": seed + run_idx,
+                "notes": notes,
+            }
+            t0 = perf_counter()
+            try:
+                with warnings.catch_warnings(record=True):
+                    warnings.simplefilter("ignore")
+                    run_model = case.factory(
+                        backend=backend,
+                        **case.kwargs_builder(n_features),
+                    )
+
+                p0 = perf_counter()
+                x_prepared = run_model.prepare_data(x_full)
+                p1 = perf_counter()
+                prepare_s = p1 - p0
+
+                x_train_p = x_prepared[:n_train]
+                x_test_p = x_prepared[n_train:]
+
+                f0 = perf_counter()
+                if case.kind == "artmap":
+                    run_model.fit(x_train_p, y_train)
+                else:
+                    run_model.fit(x_train_p)
+                f1 = perf_counter()
+                fit_s = f1 - f0
+
+                y0 = perf_counter()
+                _ = run_model.predict(x_test_p)
+                y1 = perf_counter()
+                predict_s = y1 - y0
+                total_s = perf_counter() - t0
+            except Exception as exc:
+                row["status"] = "error"
+                row["notes"] = (
+                    (row["notes"] + " | ") if row["notes"] else ""
+                ) + f"run[{run_idx}] {type(exc).__name__}: {exc}"
+                rows.append(row)
+                continue
+
+            if run_idx >= warmup:
+                rep_idx = run_idx - warmup
+                rep_prepare.append(prepare_s)
+                rep_fit.append(fit_s)
+                rep_predict.append(predict_s)
+                rep_total.append(total_s)
+                row["repeat_idx"] = str(rep_idx)
+                row["prepare_s"] = f"{prepare_s:.6f}"
+                row["fit_s"] = f"{fit_s:.6f}"
+                row["predict_s"] = f"{predict_s:.6f}"
+                row["total_s"] = f"{total_s:.6f}"
+                rows.append(row)
+
+        if rep_total:
+            rows.append(
+                {
+                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                    "model": case.name,
+                    "backend_requested": backend,
+                    "backend_actual": backend_actual,
+                    "status": "ok",
+                    "repeat_idx": "summary",
+                    "prepare_s": "",
+                    "fit_s": "",
+                    "predict_s": "",
+                    "total_s": "",
+                    "prepare_median_s": f"{median(rep_prepare):.6f}",
+                    "fit_median_s": f"{median(rep_fit):.6f}",
+                    "predict_median_s": f"{median(rep_predict):.6f}",
+                    "total_median_s": f"{median(rep_total):.6f}",
+                    "n_train": n_train,
+                    "n_test": n_test,
+                    "n_features": n_features,
+                    "n_classes": n_classes,
+                    "seed": seed,
+                    "notes": notes,
+                }
+            )
 
     return rows
 
@@ -175,6 +264,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--append", action="store_true")
     p.add_argument("--quick", action="store_true", help="Small/fast benchmark sizes.")
+    p.add_argument("--repeats", type=int, default=1, help="Measured repeats per case/backend.")
+    p.add_argument("--warmup", type=int, default=0, help="Warmup runs per case/backend.")
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="Convenience flag for stable results (equivalent to --warmup 1 --repeats 5).",
+    )
     return p.parse_args()
 
 
@@ -185,11 +281,16 @@ def main() -> int:
     n_test = args.n_test
     n_features = args.n_features
     n_classes = args.n_classes
+    repeats = max(1, args.repeats)
+    warmup = max(0, args.warmup)
     if args.quick:
         n_train = 600
         n_test = 200
         n_features = 16
         n_classes = 3
+    if args.strict:
+        warmup = max(warmup, 1)
+        repeats = max(repeats, 5)
 
     cases = [
         Case(
@@ -336,6 +437,8 @@ def main() -> int:
                 n_features=n_features,
                 n_classes=n_classes,
                 seed=args.seed + i,
+                repeats=repeats,
+                warmup=warmup,
             )
         )
 
@@ -350,10 +453,15 @@ def main() -> int:
         "backend_requested",
         "backend_actual",
         "status",
+        "repeat_idx",
         "prepare_s",
         "fit_s",
         "predict_s",
         "total_s",
+        "prepare_median_s",
+        "fit_median_s",
+        "predict_median_s",
+        "total_median_s",
         "n_train",
         "n_test",
         "n_features",

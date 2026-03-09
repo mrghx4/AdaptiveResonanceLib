@@ -71,6 +71,7 @@ class SMART(DeepARTMAP):
                 module, BaseART
             ), "Only elementary ART-like objects are supported"
         super().__init__(modules)
+        self._n_modules_cached = len(modules)
 
     def prepare_data(
         self, X: Union[np.ndarray, list[np.ndarray]], y: Optional[np.ndarray] = None
@@ -137,7 +138,7 @@ class SMART(DeepARTMAP):
             Fitted SMART model.
 
         """
-        X_list = [X] * self.n_modules
+        X_list = [X] * self._n_modules_cached
         return super().fit(
             X_list,
             max_iter=max_iter,
@@ -171,7 +172,7 @@ class SMART(DeepARTMAP):
             Partially fitted SMART model.
 
         """
-        X_list = [X] * self.n_modules
+        X_list = [X] * self._n_modules_cached
         return super(SMART, self).partial_fit(
             X_list, match_tracking=match_tracking, epsilon=epsilon
         )
@@ -195,14 +196,13 @@ class SMART(DeepARTMAP):
         None
 
         """
-        for j in range(len(self.modules)):
-            layer_colors = []
-            for k in range(self.modules[j].n_clusters):
-                if j == 0:
-                    layer_colors.append(colors[k])
-                else:
-                    layer_colors.append(colors[self.map_deep(j - 1, k)])
-            self.modules[j].plot_cluster_bounds(ax, layer_colors, linewidth)
+        modules = self.modules
+        for j, module in enumerate(modules):
+            if j == 0:
+                layer_colors = [colors[k] for k in range(module.n_clusters)]
+            else:
+                layer_colors = [colors[self.map_deep(j - 1, k)] for k in range(module.n_clusters)]
+            module.plot_cluster_bounds(ax, layer_colors, linewidth)
 
     def visualize(
         self,

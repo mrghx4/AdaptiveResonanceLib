@@ -156,3 +156,74 @@ def test_get_actions_and_rewards_uses_single_predict_call(monkeypatch, falcon_mo
     monkeypatch.setattr(falcon_model.fusion_art, "predict", _predict_once)
     falcon_model.get_actions_and_rewards(states_prep[0, :])
     assert calls["n"] == 1
+
+
+def test_get_probabilistic_action_handles_zero_reward_distribution(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    action_space = np.random.rand(4, 2)
+    zero_rewards = np.zeros((4, 1), dtype=float)
+
+    def _zero_rewards(*args, **kwargs):
+        return action_space, zero_rewards
+
+    monkeypatch.setattr(falcon_model, "get_actions_and_rewards", _zero_rewards)
+    action = falcon_model.get_probabilistic_action(states_prep[0, :])
+    assert np.isscalar(action)
+
+
+def test_default_action_space_cache_reuses_prepared_actions(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    calls = {"n": 0}
+    orig_prepare = falcon_model.fusion_art.modules[1].prepare_data
+
+    def _count_prepare(*args, **kwargs):
+        calls["n"] += 1
+        return orig_prepare(*args, **kwargs)
+
+    monkeypatch.setattr(
+        falcon_model.fusion_art.modules[1], "prepare_data", _count_prepare
+    )
+    falcon_model.get_actions_and_rewards(states_prep[0, :], action_space=None)
+    falcon_model.get_actions_and_rewards(states_prep[1, :], action_space=None)
+    assert calls["n"] == 1
+
+
+def test_action_space_cache_invalidates_after_partial_fit(monkeypatch, falcon_model):
+    states = np.random.rand(12, 2)
+    actions = np.random.rand(12, 2)
+    rewards = np.random.rand(12, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    # Build initial cache
+    falcon_model.get_actions_and_rewards(states_prep[0, :], action_space=None)
+
+    calls = {"n": 0}
+    orig_prepare = falcon_model.fusion_art.modules[1].prepare_data
+
+    def _count_prepare(*args, **kwargs):
+        calls["n"] += 1
+        return orig_prepare(*args, **kwargs)
+
+    monkeypatch.setattr(
+        falcon_model.fusion_art.modules[1], "prepare_data", _count_prepare
+    )
+    falcon_model.partial_fit(states_prep[:4], actions_prep[:4], rewards_prep[:4])
+    falcon_model.get_actions_and_rewards(states_prep[1, :], action_space=None)
+    assert calls["n"] >= 1

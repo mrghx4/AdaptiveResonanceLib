@@ -238,7 +238,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             The prepared data set and labels (if any).
 
         """
-        return [self.modules[i].prepare_data(X[i]) for i in range(self.n_modules)], y
+        return [m.prepare_data(x_i) for m, x_i in zip(self.modules, X)], y
 
     def restore_data(
         self, X: Union[np.ndarray, list[np.ndarray]], y: Optional[np.ndarray] = None
@@ -258,7 +258,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             The restored data set and labels (if any).
 
         """
-        return [self.modules[i].restore_data(X[i]) for i in range(self.n_modules)], y
+        return [m.restore_data(x_i) for m, x_i in zip(self.modules, X)], y
 
     def fit(
         self,
@@ -435,7 +435,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             x = X
         pred_a, pred_b = self.layers[-1].predict_ab(x, clip=clip)
         pred = [pred_a, pred_b]
-        for layer in self.layers[:-1][::-1]:
+        for layer in reversed(self.layers[:-1]):
             pred.append(layer.map_a2b(pred[-1]))
 
         return pred[::-1]

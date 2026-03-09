@@ -221,3 +221,25 @@ def test_fit(bartmap_model):
         bartmap_model.columns_.shape[0]
         == bartmap_model.module_a.n_clusters * bartmap_model.module_b.n_clusters
     )
+
+
+def test_fit_rows_columns_layout_matches_reference(bartmap_model):
+    X = np.random.rand(40, 40)
+    bartmap_model.fit(X, max_iter=1)
+
+    rows_ref = np.vstack(
+        [
+            bartmap_model.row_labels_ == label
+            for label in range(bartmap_model.module_a.n_clusters)
+            for _ in range(bartmap_model.module_b.n_clusters)
+        ]
+    )
+    cols_ref = np.vstack(
+        [
+            bartmap_model.column_labels_ == label
+            for _ in range(bartmap_model.module_a.n_clusters)
+            for label in range(bartmap_model.module_b.n_clusters)
+        ]
+    )
+    assert np.array_equal(bartmap_model.rows_, rows_ref)
+    assert np.array_equal(bartmap_model.columns_, cols_ref)

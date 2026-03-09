@@ -7,7 +7,7 @@
 # doi:10.1007/ 978-3-540-72383-7_128.
 
 import numpy as np
-from typing import Optional, Union, Callable, List, Literal, Tuple, Dict
+from typing import Optional, Union, Callable, List, Literal, Tuple, Dict, Sequence
 from copy import deepcopy
 from artlib.common.BaseART import BaseART
 from sklearn.utils.validation import check_is_fitted
@@ -441,7 +441,7 @@ class FusionART(BaseART):
 
         """
         keep_searching = []
-        for i in range(len(cache)):
+        for i in range(self.n):
             if cache[i]["match_criterion_bin"]:
                 keep_searching_i = self.modules[i]._match_tracking(
                     cache[i], epsilon, params[i], method
@@ -451,7 +451,7 @@ class FusionART(BaseART):
                 keep_searching.append(True)
         return all(keep_searching)
 
-    def _set_params(self, new_params: Dict):
+    def _set_params(self, new_params: Sequence[Dict]):
         """Set the parameters for each module in FusionART.
 
         Parameters
@@ -463,7 +463,7 @@ class FusionART(BaseART):
         for i in range(self.n):
             self.modules[i].params = new_params[i]
 
-    def _deep_copy_params(self) -> Dict:
+    def _deep_copy_params(self) -> list[Dict]:
         """Create a deep copy of the parameters for each module.
 
         Returns
@@ -473,7 +473,7 @@ class FusionART(BaseART):
             as values.
 
         """
-        return {i: deepcopy(module.params) for i, module in enumerate(self.modules)}
+        return [deepcopy(module.params) for module in self.modules]
 
     def step_fit(
         self,
@@ -538,6 +538,7 @@ class FusionART(BaseART):
                 order = idx[np.lexsort((idx, -T_valid))]  # last key is primary
             else:
                 order = np.array([], dtype=int)
+            params = [module.params for module in self.modules]
 
             for c_idx in order:
                 c_ = int(c_idx)
@@ -558,14 +559,11 @@ class FusionART(BaseART):
                     self.set_weight(c_, self.update(x, w, self.params, cache=cache))
                     self._set_params(base_params)
                     return c_
-                else:
-                    if not (m and no_match_reset):
-                        params = {i: self.modules[i].params for i in range(len(cache))}
-                        keep_searching = self._match_tracking(
-                            cache, epsilon, params, match_tracking
-                        )
-                        if not keep_searching:
-                            break
+                keep_searching = self._match_tracking(
+                    cache, epsilon, params, match_tracking
+                )
+                if not keep_searching:
+                    break
 
             c_new = n_categories
             w_new = self.new_weight(x, self.params)
@@ -632,7 +630,7 @@ class FusionART(BaseART):
 
         """
         n_categories = self._n_categories()
-        assert n_categories >= 0, "ART module is not fit."
+        assert n_categories > 0, "ART module is not fit."
         T, _ = zip(
             *[
                 self.category_choice(
@@ -673,11 +671,11 @@ class FusionART(BaseART):
         self.validate_data(X)
         self.check_dimensions(X)
 
-        y = np.zeros((X.shape[0],), dtype=int)
-        for i, x in enumerate(X):
-            c = self.step_pred(x, skip_channels=skip_channels)
-            y[i] = c
-        return y
+        return np.fromiter(
+            (self.step_pred(x, skip_channels=skip_channels) for x in X),
+            dtype=int,
+            count=X.shape[0],
+        )
 
     def update(
         self,
@@ -858,12 +856,13 @@ class FusionART(BaseART):
                 i += 1
             else:
                 formatted_channel_data.append(
-                    0.5
-                    * np.ones(
+                    np.full(
                         (
                             n_samples,
                             self._channel_indices[k][1] - self._channel_indices[k][0],
-                        )
+                        ),
+                        0.5,
+                        dtype=float,
                     )
                 )
 

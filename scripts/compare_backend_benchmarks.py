@@ -21,6 +21,7 @@ def safe_float(v: str) -> float | None:
 
 
 def load_avg(path: str) -> dict[tuple[str, str], dict[str, float]]:
+    summaries: dict[tuple[str, str], dict[str, float]] = {}
     buckets: dict[tuple[str, str], dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
     with open(path, newline="", encoding="utf-8") as f:
         for r in csv.DictReader(f):
@@ -29,13 +30,26 @@ def load_avg(path: str) -> dict[tuple[str, str], dict[str, float]]:
             key = (r.get("model", ""), r.get("backend_actual", ""))
             if not key[0] or not key[1]:
                 continue
+            if r.get("repeat_idx") == "summary":
+                pmap: dict[str, float] = {}
+                for p in PHASES:
+                    med_v = safe_float(r.get(p.replace("_s", "_median_s"), ""))
+                    if med_v is not None:
+                        pmap[p] = med_v
+                if pmap:
+                    summaries[key] = pmap
+                continue
             for p in PHASES:
                 v = safe_float(r.get(p, ""))
                 if v is not None:
                     buckets[key][p].append(v)
 
     out: dict[tuple[str, str], dict[str, float]] = {}
+    for key, pmap in summaries.items():
+        out[key] = pmap
     for key, pmap in buckets.items():
+        if key in out:
+            continue
         out[key] = {p: mean(vals) for p, vals in pmap.items() if vals}
     return out
 
@@ -55,6 +69,12 @@ def parse_args() -> argparse.Namespace:
         default=5.0,
         help="Flag if new time is slower than base by at least this percent",
     )
+    p.add_argument(
+        "--min-base-s",
+        type=float,
+        default=0.0,
+        help="Ignore regression checks when base timing is below this absolute threshold.",
+    )
     return p.parse_args()
 
 
@@ -70,6 +90,7 @@ def main() -> int:
         return 1
 
     threshold = args.regress_threshold_pct / 100.0
+    min_base = max(0.0, args.min_base_s)
     regressions = 0
 
     print("model,backend,phase,base_s,new_s,delta_pct,status")
@@ -82,7 +103,9 @@ def main() -> int:
                 continue
             delta = (n - b) / b
             status = "ok"
-            if delta >= threshold:
+            if b < min_base:
+                status = "skip_fast"
+            elif delta >= threshold:
                 status = "REGRESSION"
                 regressions += 1
             print(f"{model},{backend},{phase},{b:.6f},{n:.6f},{delta*100:.2f},{status}")
