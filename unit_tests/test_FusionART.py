@@ -146,6 +146,30 @@ def test_predict_regression(fusionart_model):
     assert predicted_regression.shape[0] == X_prep.shape[0]
 
 
+def test_predict_regression_matches_channel_centers(fusionart_model):
+    X = [np.random.rand(14, 2), np.random.rand(14, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    c = fusionart_model.predict(X_prep, skip_channels=[-1])
+    centers = np.asarray(fusionart_model.get_channel_centers(1))
+    expected = centers[c]
+    pred = fusionart_model.predict_regression(X_prep, target_channels=[-1])
+    np.testing.assert_allclose(pred, expected, rtol=1e-10, atol=1e-12)
+
+
+def test_predict_regression_multiple_target_channels(fusionart_model):
+    X = [np.random.rand(16, 2), np.random.rand(16, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    pred = fusionart_model.predict_regression(X_prep, target_channels=[0, 1])
+    assert isinstance(pred, list)
+    assert len(pred) == 2
+    assert pred[0].shape[0] == X_prep.shape[0]
+    assert pred[1].shape[0] == X_prep.shape[0]
+
+
 def test_join_channel_data(fusionart_model):
     # Test the join_channel_data method
     channel_1 = np.random.rand(10, 2)
@@ -166,3 +190,19 @@ def test_category_choice_value_idx_matches_cached_activation(fusionart_model):
         act_cached, _ = fusionart_model._category_choice_idx(x, c_idx)
         act_value = fusionart_model._category_choice_value_idx(x, c_idx, skip)
         assert np.isclose(act_cached, act_value)
+
+
+def test_step_pred_cpp_argmax_path_matches_python(fusionart_model):
+    X = [np.random.rand(20, 2), np.random.rand(20, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    # Force C++ argmax path, if extension is available.
+    fusionart_model._cpp_fusion_argmax_threshold = 0
+    pred_cpp = fusionart_model.step_pred(X_prep[0])
+
+    # Force pure Python path.
+    fusionart_model._cpp_fusion_argmax_threshold = 10**9
+    pred_py = fusionart_model.step_pred(X_prep[0])
+
+    assert int(pred_cpp) == int(pred_py)

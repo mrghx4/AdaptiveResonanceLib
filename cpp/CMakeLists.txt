@@ -27,6 +27,7 @@ add_library(artlib_cpp_core STATIC
     src/fuzzy_artmap_core.cpp
     src/fuzzy_art_core.cpp
     src/simple_artmap_core.cpp
+    src/fusion_core.cpp
 )
 
 target_include_directories(artlib_cpp_core

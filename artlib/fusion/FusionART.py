@@ -13,6 +13,20 @@ from artlib.common.BaseART import BaseART
 from sklearn.utils.validation import check_is_fitted
 import operator
 
+try:
+    from artlib.optimized.backends.cpp.cppFusionUtils import (
+        ArgmaxWeightedActivations,
+        ArgmaxWeightedChannelActivations,
+    )
+except ImportError:  # pragma: no cover - optional acceleration module
+    ArgmaxWeightedActivations = None
+    ArgmaxWeightedChannelActivations = None
+
+try:
+    from artlib.optimized.backends.cpp.cppSimpleARTMAP import GatherClusterCenters
+except ImportError:  # pragma: no cover - optional acceleration module
+    GatherClusterCenters = None
+
 
 def get_channel_position_tuples(
     channel_dims: List[int],
@@ -89,6 +103,7 @@ class FusionART(BaseART):
         self.channel_dims = channel_dims
         self._channel_indices = get_channel_position_tuples(self.channel_dims)
         self._gamma_values = np.asarray(self.params["gamma_values"], dtype=float)
+        self._cpp_fusion_argmax_threshold = 64
         self.dim_ = sum(channel_dims)
 
     def get_params(self, deep: bool = True) -> Dict:
@@ -721,6 +736,31 @@ class FusionART(BaseART):
         n_categories = self._n_categories()
         assert n_categories > 0, "ART module is not fit."
         skip = self._normalize_skip_channels(skip_channels)
+        if (
+            ArgmaxWeightedChannelActivations is not None
+            and n_categories >= self._cpp_fusion_argmax_threshold
+        ):
+            channel_activ = np.empty((self.n, n_categories), dtype=np.float64)
+            for k in range(self.n):
+                if k in skip:
+                    channel_activ[k, :] = 1.0
+                    continue
+                x_k = x[self._channel_indices[k][0] : self._channel_indices[k][1]]
+                mod = self.modules[k]
+                for c_ in range(n_categories):
+                    a_k, _ = mod.category_choice(x_k, mod.W[c_], mod.params)
+                    channel_activ[k, c_] = a_k
+            skip_mask = np.zeros((self.n,), dtype=np.uint8)
+            if skip:
+                skip_mask[list(skip)] = 1
+            return int(
+                ArgmaxWeightedChannelActivations(
+                    channel_activ,
+                    np.ascontiguousarray(self._gamma_values, dtype=np.float64),
+                    skip_mask,
+                )
+            )
+
         best_idx = 0
         best_t = -np.inf
         for c_ in range(n_categories):
@@ -906,11 +946,24 @@ class FusionART(BaseART):
             target_channels = [-1]
         target_channels = [self.n + k if k < 0 else k for k in target_channels]
         C = self.predict(X, clip=clip, skip_channels=target_channels)
-        centers = [self.get_channel_centers(k) for k in target_channels]
-        if len(target_channels) == 1:
-            return np.array([centers[0][c] for c in C])
-        else:
-            return [np.array([centers[k][c] for c in C]) for k in target_channels]
+        c_i32 = np.ascontiguousarray(C, dtype=np.int32)
+        predictions = []
+        for channel in target_channels:
+            centers = self.get_channel_centers(channel)
+            centers_arr = np.asarray(centers)
+            if centers_arr.dtype != object and centers_arr.ndim >= 2:
+                if GatherClusterCenters is not None:
+                    pred = GatherClusterCenters(
+                        c_i32, np.ascontiguousarray(centers_arr, dtype=np.float64)
+                    )
+                else:
+                    pred = centers_arr[c_i32]
+            else:
+                pred = np.array([centers[c] for c in C])
+            predictions.append(pred)
+        if len(predictions) == 1:
+            return predictions[0]
+        return predictions
 
     def join_channel_data(
         self, channel_data: List[np.ndarray], skip_channels: Optional[List[int]] = None

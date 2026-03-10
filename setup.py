@@ -152,6 +152,16 @@ ext_modules = [
         extra_compile_args=extra_compile_args,
     ),
     Extension(
+        "artlib.optimized.backends.cpp.cppFusionUtils",
+        [
+            os.path.join(cpp_dir, "cppFusionUtils.cpp"),
+            os.path.join(cpp_workspace_src, "fusion_core.cpp"),
+        ],
+        include_dirs=[pybind11.get_include(), cpp_workspace_include],
+        language="c++",
+        extra_compile_args=extra_compile_args,
+    ),
+    Extension(
         "artlib.optimized.backends.cpp.cppSimpleARTMAP",
         [
             os.path.join(cpp_dir, "cppSimpleARTMAP.cpp"),
