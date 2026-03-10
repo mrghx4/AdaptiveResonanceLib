@@ -11,6 +11,11 @@ from artlib.common.utils import IndexableOrKeyable
 from sklearn.utils.validation import check_is_fitted, check_X_y
 from sklearn.utils.multiclass import unique_labels
 
+try:
+    from artlib.optimized.backends.cpp.cppSimpleARTMAP import MapSimpleARTMAPLabels
+except ImportError:  # pragma: no cover - optional acceleration module
+    MapSimpleARTMAPLabels = None
+
 
 class SimpleARTMAP(BaseARTMAP):
     """SimpleARTMAP for Classification.
@@ -43,7 +48,42 @@ class SimpleARTMAP(BaseARTMAP):
         """
         self.module_a = module_a
         self._pending_cluster_b: Optional[int] = None
+        self._map_cache_version: int = 0
+        self._cached_map_version: int = -1
+        self._cached_map_n_clusters: int = -1
+        self._cached_map_labels: Optional[np.ndarray] = None
         super().__init__()
+
+    def _invalidate_map_cache(self):
+        self._cached_map_version = -1
+        self._cached_map_n_clusters = -1
+        self._cached_map_labels = None
+
+    def _notify_map_changed(self):
+        self._map_cache_version += 1
+        self._invalidate_map_cache()
+
+    def _get_map_labels_cache(self) -> np.ndarray:
+        n_clusters = int(self.module_a.n_clusters)
+        if (
+            self._cached_map_labels is None
+            or self._cached_map_version != self._map_cache_version
+            or self._cached_map_n_clusters != n_clusters
+        ):
+            self._cached_map_labels = np.ascontiguousarray(
+                [self.map[c] for c in range(n_clusters)],
+                dtype=np.int32,
+            )
+            self._cached_map_version = self._map_cache_version
+            self._cached_map_n_clusters = n_clusters
+        return self._cached_map_labels
+
+    def _map_labels_a_to_b(self, y_a: np.ndarray) -> np.ndarray:
+        y_a_i32 = np.ascontiguousarray(y_a, dtype=np.int32)
+        map_labels = self._get_map_labels_cache()
+        if MapSimpleARTMAPLabels is not None:
+            return MapSimpleARTMAPLabels(y_a_i32, map_labels).astype(int, copy=False)
+        return map_labels[y_a_i32].astype(int, copy=False)
 
     def _step_match_reset_func(
         self,
@@ -221,6 +261,7 @@ class SimpleARTMAP(BaseARTMAP):
             self._pending_cluster_b = None
         if c_a not in self.map:
             self.map[c_a] = c_b
+            self._notify_map_changed()
         else:
             assert self.map[c_a] == c_b
         return c_a
@@ -645,17 +686,8 @@ class SimpleARTMAP(BaseARTMAP):
 
         """
         check_is_fitted(self)
-        if clip:
-            X = np.clip(X, self.module_a.d_min_, self.module_a.d_max_)
-        self.module_a.validate_data(X)
-        self.module_a.check_dimensions(X)
-        module_a = self.module_a
-        map_ab = self.map
-        y_b = np.empty((X.shape[0],), dtype=int)
-        for i, x in enumerate(X):
-            c_a = module_a.step_pred(x)
-            y_b[i] = map_ab[c_a]
-        return y_b
+        y_a = np.asarray(self.module_a.predict(X, clip=clip), dtype=np.int32)
+        return self._map_labels_a_to_b(y_a)
 
     def predict_ab(
         self, X: np.ndarray, clip: bool = False
@@ -676,19 +708,9 @@ class SimpleARTMAP(BaseARTMAP):
 
         """
         check_is_fitted(self)
-        if clip:
-            X = np.clip(X, self.module_a.d_min_, self.module_a.d_max_)
-        self.module_a.validate_data(X)
-        self.module_a.check_dimensions(X)
-        module_a = self.module_a
-        map_ab = self.map
-        y_a = np.empty((X.shape[0],), dtype=int)
-        y_b = np.empty((X.shape[0],), dtype=int)
-        for i, x in enumerate(X):
-            c_a = module_a.step_pred(x)
-            y_a[i] = c_a
-            y_b[i] = map_ab[c_a]
-        return y_a, y_b
+        y_a = np.asarray(self.module_a.predict(X, clip=clip), dtype=np.int32)
+        y_b = self._map_labels_a_to_b(y_a)
+        return y_a.astype(int, copy=False), y_b
 
     def plot_cluster_bounds(
         self, ax: Axes, colors: IndexableOrKeyable, linewidth: int = 1

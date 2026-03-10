@@ -90,8 +90,8 @@ def test_predict_cache_reuse_and_refresh():
     assert cl_id_1 == cl_id_2
 
     model.partial_fit(X[:40], target[:40])
+    assert model._cpp_predict_weights is None
+    assert model._cpp_predict_cluster_labels is None
     _ = model.predict(X[:30])
-    w_id_3 = id(model._cpp_predict_weights)
-    cl_id_3 = id(model._cpp_predict_cluster_labels)
-
-    assert (w_id_3 != w_id_2) or (cl_id_3 != cl_id_2)
+    assert model._cpp_predict_weights is not None
+    assert model._cpp_predict_cluster_labels is not None

@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+from unittest.mock import MagicMock
 from artlib.supervised.SimpleARTMAP import SimpleARTMAP
 from artlib.elementary.FuzzyART import FuzzyART
 from artlib.common.BaseART import BaseART
@@ -136,3 +137,26 @@ def test_step_pred(simple_artmap_model):
     print(type(c_a), type(c_b))
     assert isinstance(c_a, (int, np.integer))
     assert isinstance(c_b, (int, np.integer))
+
+
+def test_predict_uses_module_predict_batch(simple_artmap_model):
+    X = np.random.rand(12, 5)
+    y = np.random.randint(0, 3, size=12)
+    X_prep = simple_artmap_model.prepare_data(X)
+    simple_artmap_model.fit(X_prep, y, max_iter=1)
+
+    labels_a = np.asarray(simple_artmap_model.module_a.predict(X_prep), dtype=int)
+    expected_b = simple_artmap_model.map_a2b(labels_a)
+
+    simple_artmap_model.module_a.predict = MagicMock(return_value=labels_a)
+    simple_artmap_model.module_a.step_pred = MagicMock(
+        side_effect=AssertionError("predict should not call step_pred")
+    )
+
+    pred_b = simple_artmap_model.predict(X_prep)
+    pred_a, pred_b2 = simple_artmap_model.predict_ab(X_prep)
+
+    simple_artmap_model.module_a.predict.assert_called()
+    assert np.array_equal(pred_b, expected_b)
+    assert np.array_equal(pred_a, labels_a)
+    assert np.array_equal(pred_b2, expected_b)
