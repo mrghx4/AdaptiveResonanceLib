@@ -12,4 +12,12 @@ std::vector<int> MapSimpleARTMAPLabels(
     std::size_t n_clusters
 );
 
+std::vector<double> GatherClusterCenters(
+    const int* labels,
+    std::size_t n_labels,
+    const double* centers,
+    std::size_t n_centers,
+    std::size_t center_dim
+);
+
 }  // namespace artlib_cpp

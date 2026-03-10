@@ -29,4 +29,36 @@ std::vector<int> MapSimpleARTMAPLabels(
     return labels_b;
 }
 
+std::vector<double> GatherClusterCenters(
+    const int* labels,
+    std::size_t n_labels,
+    const double* centers,
+    std::size_t n_centers,
+    std::size_t center_dim
+) {
+    if (labels == nullptr) {
+        throw std::invalid_argument("labels cannot be null");
+    }
+    if (centers == nullptr) {
+        throw std::invalid_argument("centers cannot be null");
+    }
+    if (center_dim == 0) {
+        throw std::invalid_argument("center_dim must be > 0");
+    }
+
+    std::vector<double> out(n_labels * center_dim, 0.0);
+    for (std::size_t i = 0; i < n_labels; ++i) {
+        const int c = labels[i];
+        if (c < 0 || static_cast<std::size_t>(c) >= n_centers) {
+            throw std::out_of_range("label out of range for centers");
+        }
+        const std::size_t src_off = static_cast<std::size_t>(c) * center_dim;
+        const std::size_t dst_off = i * center_dim;
+        for (std::size_t j = 0; j < center_dim; ++j) {
+            out[dst_off + j] = centers[src_off + j];
+        }
+    }
+    return out;
+}
+
 }  // namespace artlib_cpp

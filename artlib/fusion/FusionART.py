@@ -215,6 +215,27 @@ class FusionART(BaseART):
             caches[k] = c_k
         return float(activation), caches
 
+    def _category_choice_value_idx(
+        self,
+        i: np.ndarray,
+        c_idx: int,
+        skip: set[int],
+    ) -> float:
+        modules = self.modules
+        idxs = self._channel_indices
+        activation = 0.0
+        for k in range(self.n):
+            if k in skip:
+                activation += self._gamma_values[k]
+                continue
+            a_k, _ = modules[k].category_choice(
+                i[idxs[k][0] : idxs[k][1]],
+                modules[k].W[c_idx],
+                modules[k].params,
+            )
+            activation += a_k * self._gamma_values[k]
+        return float(activation)
+
     def _match_criterion_bin_idx(
         self,
         i: np.ndarray,
@@ -699,18 +720,15 @@ class FusionART(BaseART):
         """
         n_categories = self._n_categories()
         assert n_categories > 0, "ART module is not fit."
-        T, _ = zip(
-            *[
-                self._category_choice_idx(
-                    x,
-                    c_,
-                    skip_channels=skip_channels,
-                )
-                for c_ in range(n_categories)
-            ]
-        )
-        c_ = int(np.argmax(T))
-        return c_
+        skip = self._normalize_skip_channels(skip_channels)
+        best_idx = 0
+        best_t = -np.inf
+        for c_ in range(n_categories):
+            t = self._category_choice_value_idx(x, c_, skip)
+            if t > best_t:
+                best_t = t
+                best_idx = c_
+        return int(best_idx)
 
     def predict(
         self, X: np.ndarray, clip: bool = False, skip_channels: Optional[List[int]] = None
@@ -738,11 +756,11 @@ class FusionART(BaseART):
         self.validate_data(X)
         self.check_dimensions(X)
 
-        return np.fromiter(
-            (self.step_pred(x, skip_channels=skip_channels) for x in X),
-            dtype=int,
-            count=X.shape[0],
-        )
+        y = np.empty((X.shape[0],), dtype=int)
+        step_pred = self.step_pred
+        for i, x in enumerate(X):
+            y[i] = step_pred(x, skip_channels=skip_channels)
+        return y
 
     def update(
         self,

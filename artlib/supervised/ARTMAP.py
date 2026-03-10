@@ -9,6 +9,11 @@ from artlib.common.BaseART import BaseART
 from artlib.supervised.SimpleARTMAP import SimpleARTMAP
 from sklearn.utils.validation import check_is_fitted
 
+try:
+    from artlib.optimized.backends.cpp.cppSimpleARTMAP import GatherClusterCenters
+except ImportError:  # pragma: no cover - optional acceleration module
+    GatherClusterCenters = None
+
 
 class ARTMAP(SimpleARTMAP):
     """ARTMAP for Classification and Regression.
@@ -326,5 +331,10 @@ class ARTMAP(SimpleARTMAP):
         centers = self.module_b.get_cluster_centers()
         centers_arr = np.asarray(centers)
         if centers_arr.dtype != object and centers_arr.ndim >= 2:
+            if GatherClusterCenters is not None:
+                return GatherClusterCenters(
+                    np.ascontiguousarray(C, dtype=np.int32),
+                    np.ascontiguousarray(centers_arr, dtype=np.float64),
+                )
             return centers_arr[C]
         return np.array([centers[c] for c in C])

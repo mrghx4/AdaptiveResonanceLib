@@ -20,3 +20,25 @@ def test_map_simple_artmap_labels_out_of_range_raises():
 
     with pytest.raises(Exception):
         cpp_simple_artmap.MapSimpleARTMAPLabels(labels_a, cluster_labels)
+
+
+def test_gather_cluster_centers():
+    labels = np.array([2, 0, 1], dtype=np.int32)
+    centers = np.array(
+        [
+            [10.0, 11.0],
+            [20.0, 21.0],
+            [30.0, 31.0],
+        ],
+        dtype=np.float64,
+    )
+    out = cpp_simple_artmap.GatherClusterCenters(labels, centers)
+    exp = np.array([[30.0, 31.0], [10.0, 11.0], [20.0, 21.0]], dtype=np.float64)
+    np.testing.assert_allclose(out, exp, rtol=0.0, atol=0.0)
+
+
+def test_gather_cluster_centers_out_of_range_raises():
+    labels = np.array([0, 3], dtype=np.int32)
+    centers = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float64)
+    with pytest.raises(Exception):
+        cpp_simple_artmap.GatherClusterCenters(labels, centers)

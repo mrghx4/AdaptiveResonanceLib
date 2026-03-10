@@ -153,3 +153,16 @@ def test_join_channel_data(fusionart_model):
 
     X = fusionart_model.join_channel_data([channel_1, channel_2])
     assert X.shape == (10, 4)
+
+
+def test_category_choice_value_idx_matches_cached_activation(fusionart_model):
+    X = [np.random.rand(12, 2), np.random.rand(12, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    x = X_prep[0]
+    skip = fusionart_model._normalize_skip_channels(None)
+    for c_idx in range(fusionart_model.n_clusters):
+        act_cached, _ = fusionart_model._category_choice_idx(x, c_idx)
+        act_value = fusionart_model._category_choice_value_idx(x, c_idx, skip)
+        assert np.isclose(act_cached, act_value)

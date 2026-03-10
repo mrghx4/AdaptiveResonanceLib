@@ -136,3 +136,19 @@ def test_predict_regression(artmap_model):
 
     regression_preds = artmap_model.predict_regression(X_prep)
     assert regression_preds.shape[0] == X.shape[0]
+
+
+def test_predict_regression_matches_centers(artmap_model):
+    np.random.seed(7)
+    X = np.random.rand(20, 4)
+    y = np.random.rand(20, 4)
+
+    X_prep, y_prep = artmap_model.prepare_data(X, y)
+    artmap_model.fit(X_prep, y_prep, max_iter=1)
+
+    c = artmap_model.predict(X_prep)
+    centers = np.asarray(artmap_model.module_b.get_cluster_centers())
+    expected = centers[c]
+    pred = artmap_model.predict_regression(X_prep)
+
+    np.testing.assert_allclose(pred, expected, rtol=1e-10, atol=1e-12)
