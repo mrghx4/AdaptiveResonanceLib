@@ -160,3 +160,22 @@ def test_predict_uses_module_predict_batch(simple_artmap_model):
     assert np.array_equal(pred_b, expected_b)
     assert np.array_equal(pred_a, labels_a)
     assert np.array_equal(pred_b2, expected_b)
+
+
+def test_map_cache_refreshes_on_manual_map_value_change(simple_artmap_model):
+    X = np.random.rand(14, 5)
+    y = np.random.randint(0, 3, size=14)
+    X_prep = simple_artmap_model.prepare_data(X)
+    simple_artmap_model.fit(X_prep, y, max_iter=1)
+
+    _ = simple_artmap_model.predict(X_prep)
+    cache_before = simple_artmap_model._get_map_labels_cache().copy()
+    if len(simple_artmap_model.map) == 0:
+        pytest.skip("No map entries to mutate.")
+    key = int(next(iter(simple_artmap_model.map.keys())))
+    old_val = int(simple_artmap_model.map[key])
+    simple_artmap_model.map[key] = old_val + 1
+
+    cache_after = simple_artmap_model._get_map_labels_cache()
+    assert int(cache_after[key]) == old_val + 1
+    assert not np.array_equal(cache_before, cache_after)

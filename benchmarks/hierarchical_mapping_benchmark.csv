@@ -1,0 +1,13 @@
+timestamp_utc,model,backend_requested,backend_actual,status,repeat_idx,prepare_s,fit_s,predict_s,total_s,prepare_median_s,fit_median_s,predict_median_s,total_median_s,n_train,n_test,n_features,n_classes,seed,notes
+2026-03-11T13:23:25.056080+00:00,DeepARTMAP_map_deep_chain,python,python,ok,0,,,0.000046,0.000046,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056138+00:00,DeepARTMAP_map_deep_chain,python,python,ok,1,,,0.000043,0.000043,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056183+00:00,DeepARTMAP_map_deep_chain,python,python,ok,2,,,0.000041,0.000041,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056226+00:00,DeepARTMAP_map_deep_chain,python,python,ok,3,,,0.000040,0.000040,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056268+00:00,DeepARTMAP_map_deep_chain,python,python,ok,4,,,0.000040,0.000040,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056355+00:00,DeepARTMAP_map_deep_chain,c++,c++,ok,0,,,0.000025,0.000025,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056382+00:00,DeepARTMAP_map_deep_chain,c++,c++,ok,1,,,0.000024,0.000024,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056407+00:00,DeepARTMAP_map_deep_chain,c++,c++,ok,2,,,0.000023,0.000023,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056436+00:00,DeepARTMAP_map_deep_chain,c++,c++,ok,3,,,0.000023,0.000023,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056462+00:00,DeepARTMAP_map_deep_chain,c++,c++,ok,4,,,0.000024,0.000024,,,,,4000,0,,,,phase=map_deep_chain
+2026-03-11T13:23:25.056465+00:00,DeepARTMAP_map_deep_chain,python,python,ok,summary,,,,,,,0.000041,0.000041,4000,0,24,5,42,phase=map_deep_chain
+2026-03-11T13:23:25.056470+00:00,DeepARTMAP_map_deep_chain,c++,c++,ok,summary,,,,,,,0.000024,0.000024,4000,0,24,5,42,phase=map_deep_chain

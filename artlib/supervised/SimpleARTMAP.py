@@ -49,33 +49,39 @@ class SimpleARTMAP(BaseARTMAP):
         self.module_a = module_a
         self._pending_cluster_b: Optional[int] = None
         self._map_cache_version: int = 0
-        self._cached_map_version: int = -1
-        self._cached_map_n_clusters: int = -1
+        self._cached_map_signature: Optional[tuple[int, int, int, int, int]] = None
         self._cached_map_labels: Optional[np.ndarray] = None
         super().__init__()
 
     def _invalidate_map_cache(self):
-        self._cached_map_version = -1
-        self._cached_map_n_clusters = -1
+        self._cached_map_signature = None
         self._cached_map_labels = None
 
     def _notify_map_changed(self):
         self._map_cache_version += 1
         self._invalidate_map_cache()
 
+    def _map_signature(self) -> tuple[int, int, int, int, int]:
+        if len(self.map) == 0:
+            return (id(self.map), 0, -1, 0, self._map_cache_version)
+        max_key = int(max(self.map))
+        checksum = 0
+        for k, v in self.map.items():
+            checksum ^= ((int(k) * 1315423911) ^ (int(v) * 2654435761)) & 0xFFFFFFFF
+        return (id(self.map), len(self.map), max_key, checksum, self._map_cache_version)
+
     def _get_map_labels_cache(self) -> np.ndarray:
         n_clusters = int(self.module_a.n_clusters)
+        sig = self._map_signature()
         if (
             self._cached_map_labels is None
-            or self._cached_map_version != self._map_cache_version
-            or self._cached_map_n_clusters != n_clusters
+            or self._cached_map_signature != sig
         ):
             self._cached_map_labels = np.ascontiguousarray(
                 [self.map[c] for c in range(n_clusters)],
                 dtype=np.int32,
             )
-            self._cached_map_version = self._map_cache_version
-            self._cached_map_n_clusters = n_clusters
+            self._cached_map_signature = sig
         return self._cached_map_labels
 
     def _map_labels_a_to_b(self, y_a: np.ndarray) -> np.ndarray:
