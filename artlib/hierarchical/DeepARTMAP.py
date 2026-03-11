@@ -12,6 +12,11 @@ from artlib.common.BaseARTMAP import BaseARTMAP
 from artlib.supervised.SimpleARTMAP import SimpleARTMAP
 from artlib.supervised.ARTMAP import ARTMAP
 
+try:
+    from artlib.optimized.backends.cpp.cppSimpleARTMAP import MapSimpleARTMAPLabelsChain
+except ImportError:  # pragma: no cover - optional acceleration module
+    MapSimpleARTMAPLabelsChain = None
+
 
 class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
     """DeepARTMAP for Hierachical Supervised and Unsupervised Learning.
@@ -189,6 +194,20 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         """
         if level < 0:
             level += len(self.layers)
+        if isinstance(y_a, np.ndarray) and MapSimpleARTMAPLabelsChain is not None:
+            chain = []
+            for i in range(level, -1, -1):
+                map_arr = self._get_layer_map_array(i)
+                if map_arr is None:
+                    chain = []
+                    break
+                chain.append(map_arr)
+            if chain:
+                y_i32 = np.ascontiguousarray(y_a, dtype=np.int32)
+                try:
+                    return MapSimpleARTMAPLabelsChain(y_i32, chain)
+                except Exception:
+                    pass
         y_b = y_a
         for i in range(level, -1, -1):
             if isinstance(y_b, np.ndarray):
@@ -343,7 +362,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         if y is not None:
             self.is_supervised = True
             self.layers = [SimpleARTMAP(modules[i]) for i in range(self._n_modules_cached)]
-            self.layers[0] = self.layers[0].fit(
+            self.layers[0].fit(
                 X[0],
                 y,
                 max_iter=max_iter,
@@ -361,7 +380,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
                 list[BaseARTMAP],
                 [SimpleARTMAP(modules[i]) for i in range(2, self._n_modules_cached)],
             )
-            self.layers[0] = self.layers[0].fit(
+            self.layers[0].fit(
                 X[1],
                 X[0],
                 max_iter=max_iter,
@@ -372,7 +391,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         layers = self.layers
         for art_i, layer in enumerate(layers[1:], start=1):
             y_i = layers[art_i - 1].labels_a
-            layers[art_i] = layer.fit(
+            layer.fit(
                 X[art_i],
                 y_i,
                 max_iter=max_iter,
@@ -418,7 +437,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
                 "Labels were previously provided. "
                 "Must continue to provide labels for partial fit."
             )
-            self.layers[0] = self.layers[0].partial_fit(
+            self.layers[0].partial_fit(
                 X[0], y, match_tracking=match_tracking, epsilon=epsilon
             )
             x_i = 1
@@ -439,7 +458,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
                 "Do not provide labels to continue partial fit."
             )
 
-            self.layers[0] = self.layers[0].partial_fit(
+            self.layers[0].partial_fit(
                 X[1],
                 X[0],
                 match_tracking=match_tracking,
@@ -451,7 +470,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         layers = self.layers
         for art_i, layer in enumerate(layers[1:], start=1):
             y_i = layers[art_i - 1].labels_a[-n_samples:]
-            layers[art_i] = layer.partial_fit(
+            layer.partial_fit(
                 X[x_i],
                 y_i,
                 match_tracking=match_tracking,

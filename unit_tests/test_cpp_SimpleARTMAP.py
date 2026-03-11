@@ -42,3 +42,17 @@ def test_gather_cluster_centers_out_of_range_raises():
     centers = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float64)
     with pytest.raises(Exception):
         cpp_simple_artmap.GatherClusterCenters(labels, centers)
+
+
+def test_map_simple_artmap_labels_chain():
+    labels = np.array([0, 1, 2, 1], dtype=np.int32)
+    map_chain = [
+        np.array([2, 0, 1], dtype=np.int32),
+        np.array([1, 0, 2], dtype=np.int32),
+    ]
+    out = cpp_simple_artmap.MapSimpleARTMAPLabelsChain(labels, map_chain)
+
+    expected = labels.copy()
+    for m in map_chain:
+        expected = m[expected]
+    assert np.array_equal(out, expected)

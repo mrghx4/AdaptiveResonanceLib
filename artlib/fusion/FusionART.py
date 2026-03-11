@@ -543,7 +543,6 @@ class FusionART(BaseART):
             Whether to continue searching for a match across all channels.
 
         """
-        keep_searching = []
         for i in range(self.n):
             if cache[i]["match_criterion_bin"]:
                 keep_searching_i = self.modules[i]._match_tracking(
@@ -551,10 +550,7 @@ class FusionART(BaseART):
                 )
                 if not keep_searching_i:
                     return False
-                keep_searching.append(True)
-            else:
-                keep_searching.append(True)
-        return all(keep_searching)
+        return True
 
     def _set_params(self, new_params: Sequence[Dict]):
         """Set the parameters for each module in FusionART.
@@ -615,30 +611,27 @@ class FusionART(BaseART):
             self.add_weight(w_new)
             return 0
         else:
+            T_values = np.full((n_categories,), np.nan, dtype=float)
+            T_cache: List[Optional[Dict]] = [None] * n_categories
             if match_tracking in ["MT~"] and match_reset_func is not None:
-                T_values, T_cache = zip(
-                    *[
-                        self._category_choice_idx(x, c_)
-                        if match_reset_func(x, w, c_, params=self.params, cache=None)
-                        else (np.nan, None)
-                        for c_, w in ((c_, self._cluster_weight(c_)) for c_ in range(n_categories))
-                    ]
-                )
+                for c_ in range(n_categories):
+                    w = self._cluster_weight(c_)
+                    if match_reset_func(x, w, c_, params=self.params, cache=None):
+                        t, c = self._category_choice_idx(x, c_)
+                        T_values[c_] = t
+                        T_cache[c_] = c
             else:
-                T_values, T_cache = zip(
-                    *[
-                        self._category_choice_idx(x, c_)
-                        for c_ in range(n_categories)
-                    ]
-                )
-            T = np.array(T_values)
+                for c_ in range(n_categories):
+                    t, c = self._category_choice_idx(x, c_)
+                    T_values[c_] = t
+                    T_cache[c_] = c
 
             # Sort candidates once:
             # primary = -T (descending T), secondary = index (ascending)
-            valid = ~np.isnan(T)
+            valid = ~np.isnan(T_values)
             if np.any(valid):
-                idx = np.arange(T.shape[0])[valid]
-                T_valid = T[valid]
+                idx = np.arange(T_values.shape[0])[valid]
+                T_valid = T_values[valid]
                 order = idx[np.lexsort((idx, -T_valid))]  # last key is primary
             else:
                 order = np.array([], dtype=int)
@@ -647,6 +640,7 @@ class FusionART(BaseART):
             for c_idx in order:
                 c_ = int(c_idx)
                 cache = T_cache[c_]
+                assert cache is not None
                 m, cache = self._match_criterion_bin_idx(
                     x, c_, cache=cache, op=mt_operator
                 )

@@ -53,6 +53,29 @@ py::array_t<double> GatherClusterCenters(IArray labels, py::array_t<double> cent
     return arr;
 }
 
+py::array_t<int> MapSimpleARTMAPLabelsChain(IArray labels, py::list map_chain) {
+    auto lb = labels.request();
+    if (lb.ndim != 1) throw std::runtime_error("labels must be 1-D");
+    const auto* lb_ptr = static_cast<const int*>(lb.ptr);
+    const std::size_t n_labels = static_cast<std::size_t>(lb.shape[0]);
+
+    std::vector<std::vector<int>> chain;
+    chain.reserve(static_cast<std::size_t>(py::len(map_chain)));
+    for (py::handle item : map_chain) {
+        IArray map_arr = py::cast<IArray>(item);
+        auto mb = map_arr.request();
+        if (mb.ndim != 1) throw std::runtime_error("each map entry must be 1-D");
+        const auto* mp = static_cast<const int*>(mb.ptr);
+        const std::size_t n = static_cast<std::size_t>(mb.shape[0]);
+        chain.emplace_back(mp, mp + n);
+    }
+
+    std::vector<int> out = artlib_cpp::MapSimpleARTMAPLabelsChain(lb_ptr, n_labels, chain);
+    py::array_t<int> arr(out.size());
+    std::memcpy(arr.mutable_data(), out.data(), out.size() * sizeof(int));
+    return arr;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(cppSimpleARTMAP, m) {
@@ -67,5 +90,11 @@ PYBIND11_MODULE(cppSimpleARTMAP, m) {
         &GatherClusterCenters,
         py::arg("labels"),
         py::arg("centers")
+    );
+    m.def(
+        "MapSimpleARTMAPLabelsChain",
+        &MapSimpleARTMAPLabelsChain,
+        py::arg("labels"),
+        py::arg("map_chain")
     );
 }
