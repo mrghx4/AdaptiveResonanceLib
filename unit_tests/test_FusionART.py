@@ -170,6 +170,25 @@ def test_predict_regression_multiple_target_channels(fusionart_model):
     assert pred[1].shape[0] == X_prep.shape[0]
 
 
+def test_predict_regression_channel_centers_cache_reuse_and_invalidate(fusionart_model):
+    X = [np.random.rand(18, 2), np.random.rand(18, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    _ = fusionart_model.predict_regression(X_prep, target_channels=[-1])
+    assert 1 in fusionart_model._channel_centers_cache
+    cache_id_1 = id(fusionart_model._channel_centers_cache[1])
+
+    _ = fusionart_model.predict_regression(X_prep, target_channels=[-1])
+    cache_id_2 = id(fusionart_model._channel_centers_cache[1])
+    assert cache_id_1 == cache_id_2
+
+    # Any weight update path should invalidate the centers cache.
+    w0 = fusionart_model.W[0]
+    fusionart_model.set_weight(0, w0)
+    assert fusionart_model._channel_centers_cache == {}
+
+
 def test_join_channel_data(fusionart_model):
     # Test the join_channel_data method
     channel_1 = np.random.rand(10, 2)
@@ -206,3 +225,10 @@ def test_step_pred_cpp_argmax_path_matches_python(fusionart_model):
     pred_py = fusionart_model.step_pred(X_prep[0])
 
     assert int(pred_cpp) == int(pred_py)
+
+
+def test_normalize_skip_channels_rejects_out_of_range_indices(fusionart_model):
+    with pytest.raises(ValueError, match="out of range"):
+        fusionart_model._normalize_skip_channels([2])
+    with pytest.raises(ValueError, match="out of range"):
+        fusionart_model._normalize_skip_channels([-3])

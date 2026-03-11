@@ -21,9 +21,15 @@ fi
 export SCIKIT_LEARN_DATA="${ROOT_DIR}/.sklearn_data"
 
 OUT_CSV="benchmarks/backend_runtime_baseline_quick.csv"
+FUSION_CSV="benchmarks/fusionart_benchmark_quick.csv"
+HIER_CSV="benchmarks/hierarchical_mapping_benchmark_quick.csv"
 
 bash scripts/run_cpp_parity_gate.sh
 "${PY_CMD[@]}" scripts/benchmark_backends.py --quick --out "$OUT_CSV"
 "${PY_CMD[@]}" scripts/summarize_backend_benchmarks.py --in "$OUT_CSV" --phase total_s --format plain
+"${PY_CMD[@]}" scripts/benchmark_fusionart.py --quick --out "$FUSION_CSV"
+"${PY_CMD[@]}" scripts/summarize_backend_benchmarks.py --in "$FUSION_CSV" --phase predict_s --format plain
+"${PY_CMD[@]}" scripts/benchmark_hierarchical_mapping.py --out "$HIER_CSV" --repeats 5 --warmup 1
+"${PY_CMD[@]}" scripts/summarize_backend_benchmarks.py --in "$HIER_CSV" --phase predict_s --format plain
 
-echo "Local V&V complete. CSV: ${OUT_CSV}"
+echo "Local V&V complete. CSVs: ${OUT_CSV}, ${FUSION_CSV}, ${HIER_CSV}"

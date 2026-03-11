@@ -44,20 +44,26 @@ public:
 private:
     void reset_rho();
     static double l1_and(const double* x, const std::vector<double>& w, int len);
-    double category_choice(const double* sample, const std::vector<double>& w) const;
+    double category_choice(
+        const double* sample, const std::vector<double>& w, double w_l1
+    ) const;
     double match(const double* sample, const std::vector<double>& w) const;
-    std::vector<double> update_weight(
-        const std::vector<double>& sample, const std::vector<double>& w
+    void update_weight_inplace(
+        const double* sample,
+        std::size_t sample_len,
+        std::vector<double>& w,
+        double& w_l1
     ) const;
     bool match_tracking(double m);
     bool matches_vigilance(double m) const;
-    int step_fit(const std::vector<double>& sample, int c_b);
+    int step_fit(const double* sample, std::size_t sample_len, int c_b);
     void validate_x(const double* x, std::size_t rows, std::size_t cols) const;
 
     FuzzyARTMAPParams params_;
     int dim_original_;
     double rho_runtime_;
     std::vector<std::vector<double>> weights_;
+    std::vector<double> weight_l1_;
     std::unordered_map<int, int> cluster_map_;
     std::vector<int> labels_a_;
 };

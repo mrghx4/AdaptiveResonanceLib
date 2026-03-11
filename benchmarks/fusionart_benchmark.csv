@@ -1,0 +1,17 @@
+timestamp_utc,model,backend_requested,backend_actual,status,repeat_idx,prepare_s,fit_s,predict_s,total_s,prepare_median_s,fit_median_s,predict_median_s,total_median_s,n_train,n_test,n_features,n_classes,seed,notes
+2026-03-11T22:28:42.530821+00:00,FusionART_predict,python,python,ok,0,0.000252,0.014301,0.001500,0.017102,,,,,800,300,10,3,43,
+2026-03-11T22:28:42.530840+00:00,FusionART_predict_regression,python,python,ok,0,,,0.001049,0.001049,,,,,800,300,10,3,43,phase=predict_regression
+2026-03-11T22:28:42.556184+00:00,FusionART_predict,python,python,ok,1,0.000202,0.018480,0.003627,0.024752,,,,,800,300,10,3,44,
+2026-03-11T22:28:42.556196+00:00,FusionART_predict_regression,python,python,ok,1,,,0.002442,0.002442,,,,,800,300,10,3,44,phase=predict_regression
+2026-03-11T22:28:42.573485+00:00,FusionART_predict,python,python,ok,2,0.000163,0.014367,0.001352,0.016856,,,,,800,300,10,3,45,
+2026-03-11T22:28:42.573493+00:00,FusionART_predict_regression,python,python,ok,2,,,0.000975,0.000975,,,,,800,300,10,3,45,phase=predict_regression
+2026-03-11T22:28:42.573495+00:00,FusionART_predict,python,python,ok,summary,,,,,,,0.001500,0.017102,800,300,10,3,42,
+2026-03-11T22:28:42.573501+00:00,FusionART_predict_regression,python,python,ok,summary,,,,,,,0.001049,0.001049,800,300,10,3,42,phase=predict_regression
+2026-03-11T22:28:42.618688+00:00,FusionART_predict,c++,c++,ok,0,0.000178,0.014362,0.001367,0.016883,,,,,800,300,10,3,43,
+2026-03-11T22:28:42.618698+00:00,FusionART_predict_regression,c++,c++,ok,0,,,0.000977,0.000977,,,,,800,300,10,3,43,phase=predict_regression
+2026-03-11T22:28:42.644266+00:00,FusionART_predict,c++,c++,ok,1,0.000170,0.018752,0.003702,0.025127,,,,,800,300,10,3,44,
+2026-03-11T22:28:42.644278+00:00,FusionART_predict_regression,c++,c++,ok,1,,,0.002503,0.002503,,,,,800,300,10,3,44,phase=predict_regression
+2026-03-11T22:28:42.662059+00:00,FusionART_predict,c++,c++,ok,2,0.000279,0.014516,0.001417,0.017211,,,,,800,300,10,3,45,
+2026-03-11T22:28:42.662064+00:00,FusionART_predict_regression,c++,c++,ok,2,,,0.000999,0.000999,,,,,800,300,10,3,45,phase=predict_regression
+2026-03-11T22:28:42.662067+00:00,FusionART_predict,c++,c++,ok,summary,,,,,,,0.001417,0.017211,800,300,10,3,42,
+2026-03-11T22:28:42.662072+00:00,FusionART_predict_regression,c++,c++,ok,summary,,,,,,,0.000999,0.000999,800,300,10,3,42,phase=predict_regression

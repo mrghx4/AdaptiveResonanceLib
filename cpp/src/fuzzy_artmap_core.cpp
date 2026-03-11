@@ -5,6 +5,7 @@
 #include <limits>
 #include <numeric>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace artlib_cpp {
@@ -18,6 +19,7 @@ void FuzzyARTMAPCore::set_state(
 ) {
     if (weights.empty() && cluster_labels.empty()) {
         weights_.clear();
+        weight_l1_.clear();
         cluster_map_.clear();
         dim_original_ = 0;
         rho_runtime_ = params_.rho;
@@ -43,6 +45,10 @@ void FuzzyARTMAPCore::set_state(
     }
 
     weights_ = weights;
+    weight_l1_.assign(weights_.size(), 0.0);
+    for (std::size_t i = 0; i < weights_.size(); ++i) {
+        weight_l1_[i] = std::accumulate(weights_[i].begin(), weights_[i].end(), 0.0);
+    }
     cluster_map_.clear();
     for (std::size_t i = 0; i < cluster_labels.size(); ++i) {
         cluster_map_[static_cast<int>(i)] = cluster_labels[i];
@@ -68,8 +74,7 @@ void FuzzyARTMAPCore::fit(
 
     for (std::size_t i = 0; i < rows; ++i) {
         const double* row = x + i * cols;
-        std::vector<double> sample(row, row + cols);
-        labels_a_[i] = step_fit(sample, y[i]);
+        labels_a_[i] = step_fit(row, cols, y[i]);
     }
 }
 
@@ -88,7 +93,7 @@ std::pair<std::vector<int>, std::vector<int>> FuzzyARTMAPCore::predict(
         double best_t = -1.0;
 
         for (std::size_t c = 0; c < weights_.size(); ++c) {
-            const double t = category_choice(row, weights_[c]);
+            const double t = category_choice(row, weights_[c], weight_l1_[c]);
             if (t > best_t) {
                 best_t = t;
                 best_id = static_cast<int>(c);
@@ -120,10 +125,12 @@ double FuzzyARTMAPCore::l1_and(const double* x, const std::vector<double>& w, in
     return s;
 }
 
-double FuzzyARTMAPCore::category_choice(const double* sample, const std::vector<double>& w) const {
+double FuzzyARTMAPCore::category_choice(
+    const double* sample, const std::vector<double>& w, double w_l1
+) const {
     const int len = static_cast<int>(w.size());
     const double num = l1_and(sample, w, len);
-    const double denom = params_.alpha + std::accumulate(w.begin(), w.end(), 0.0);
+    const double denom = params_.alpha + w_l1;
     return num / denom;
 }
 
@@ -133,14 +140,19 @@ double FuzzyARTMAPCore::match(const double* sample, const std::vector<double>& w
     return num / static_cast<double>(dim_original_);
 }
 
-std::vector<double> FuzzyARTMAPCore::update_weight(
-    const std::vector<double>& sample, const std::vector<double>& w
+void FuzzyARTMAPCore::update_weight_inplace(
+    const double* sample,
+    std::size_t sample_len,
+    std::vector<double>& w,
+    double& w_l1
 ) const {
-    std::vector<double> out(w.size());
-    for (std::size_t j = 0; j < w.size(); ++j) {
-        out[j] = params_.beta * std::min(sample[j], w[j]) + (1.0 - params_.beta) * w[j];
+    w_l1 = 0.0;
+    for (std::size_t j = 0; j < sample_len; ++j) {
+        const double updated =
+            params_.beta * std::min(sample[j], w[j]) + (1.0 - params_.beta) * w[j];
+        w[j] = updated;
+        w_l1 += updated;
     }
-    return out;
 }
 
 bool FuzzyARTMAPCore::match_tracking(double m) {
@@ -164,10 +176,11 @@ bool FuzzyARTMAPCore::matches_vigilance(double m) const {
     throw std::invalid_argument("Invalid MT mode");
 }
 
-int FuzzyARTMAPCore::step_fit(const std::vector<double>& sample, int c_b) {
+int FuzzyARTMAPCore::step_fit(const double* sample, std::size_t sample_len, int c_b) {
     reset_rho();
     if (weights_.empty()) {
-        weights_.push_back(sample);
+        weights_.emplace_back(sample, sample + sample_len);
+        weight_l1_.push_back(std::accumulate(sample, sample + sample_len, 0.0));
         cluster_map_[0] = c_b;
         return 0;
     }
@@ -175,8 +188,8 @@ int FuzzyARTMAPCore::step_fit(const std::vector<double>& sample, int c_b) {
     const std::size_t k = weights_.size();
     std::vector<double> t(k), m(k);
     for (std::size_t i = 0; i < k; ++i) {
-        t[i] = category_choice(sample.data(), weights_[i]);
-        m[i] = match(sample.data(), weights_[i]);
+        t[i] = category_choice(sample, weights_[i], weight_l1_[i]);
+        m[i] = match(sample, weights_[i]);
     }
 
     std::vector<int> order;
@@ -195,13 +208,14 @@ int FuzzyARTMAPCore::step_fit(const std::vector<double>& sample, int c_b) {
             continue;
         }
 
-        weights_[best] = update_weight(sample, weights_[best]);
+        update_weight_inplace(sample, sample_len, weights_[best], weight_l1_[best]);
         cluster_map_[best] = c_b;
         return best;
     }
 
     const int new_id = static_cast<int>(weights_.size());
-    weights_.push_back(sample);
+    weights_.emplace_back(sample, sample + sample_len);
+    weight_l1_.push_back(std::accumulate(sample, sample + sample_len, 0.0));
     cluster_map_[new_id] = c_b;
     return new_id;
 }
