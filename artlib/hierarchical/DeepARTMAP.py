@@ -48,8 +48,10 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         """
         assert len(modules) >= 1, "Must provide at least one ART module"
         self.modules = modules
+        self._n_modules_cached = len(modules)
         self.layers: list[BaseARTMAP] = []
         self.is_supervised: Optional[bool] = None
+        self._layer_map_cache: dict[int, tuple[tuple[int, int, int], np.ndarray]] = {}
 
     def get_params(self, deep: bool = True) -> dict:
         """Get parameters for this estimator.
@@ -153,7 +155,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             The number of ART modules.
 
         """
-        return len(self.modules)
+        return self._n_modules_cached
 
     @property
     def n_layers(self) -> int:
@@ -191,6 +193,46 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         for i in range(level, -1, -1):
             y_b = self.layers[i].map_a2b(y_b)
         return y_b
+
+    def _invalidate_layer_map_cache(self):
+        self._layer_map_cache.clear()
+
+    @staticmethod
+    def _map_signature(layer: BaseARTMAP) -> tuple[int, int, int]:
+        if len(layer.map) == 0:
+            return (id(layer.map), 0, -1)
+        return (id(layer.map), len(layer.map), int(max(layer.map)))
+
+    def _get_layer_map_array(self, layer_idx: int) -> Optional[np.ndarray]:
+        layer = self.layers[layer_idx]
+        sig = self._map_signature(layer)
+        cached = self._layer_map_cache.get(layer_idx)
+        if cached is not None and cached[0] == sig:
+            return cached[1]
+
+        if len(layer.map) == 0:
+            return None
+        max_key = sig[2]
+        map_arr = np.full((max_key + 1,), -1, dtype=np.int32)
+        for k, v in layer.map.items():
+            map_arr[int(k)] = int(v)
+        self._layer_map_cache[layer_idx] = (sig, map_arr)
+        return map_arr
+
+    def _map_layer_labels(self, layer_idx: int, y_a: np.ndarray) -> np.ndarray:
+        map_arr = self._get_layer_map_array(layer_idx)
+        if map_arr is None:
+            return self.layers[layer_idx].map_a2b(y_a)
+        y_i32 = np.ascontiguousarray(y_a, dtype=np.int32)
+        if y_i32.size == 0:
+            return y_i32
+        max_label = int(np.max(y_i32))
+        if max_label >= map_arr.shape[0]:
+            return self.layers[layer_idx].map_a2b(y_a)
+        mapped = map_arr[y_i32]
+        if np.any(mapped < 0):
+            return self.layers[layer_idx].map_a2b(y_a)
+        return mapped
 
     def validate_data(self, X: list[np.ndarray], y: Optional[np.ndarray] = None):
         """Validate the data before clustering.
@@ -293,7 +335,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         modules = self.modules
         if y is not None:
             self.is_supervised = True
-            self.layers = [SimpleARTMAP(modules[i]) for i in range(self.n_modules)]
+            self.layers = [SimpleARTMAP(modules[i]) for i in range(self._n_modules_cached)]
             self.layers[0] = self.layers[0].fit(
                 X[0],
                 y,
@@ -304,13 +346,13 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         else:
             self.is_supervised = False
             assert (
-                self.n_modules >= 2
+                self._n_modules_cached >= 2
             ), "Must provide at least two ART modules when providing cluster labels"
             self.layers = cast(
                 list[BaseARTMAP], [ARTMAP(modules[1], modules[0])]
             ) + cast(
                 list[BaseARTMAP],
-                [SimpleARTMAP(modules[i]) for i in range(2, self.n_modules)],
+                [SimpleARTMAP(modules[i]) for i in range(2, self._n_modules_cached)],
             )
             self.layers[0] = self.layers[0].fit(
                 X[1],
@@ -321,16 +363,16 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             )
 
         layers = self.layers
-        for art_i in range(1, len(layers)):
+        for art_i, layer in enumerate(layers[1:], start=1):
             y_i = layers[art_i - 1].labels_a
-            layers[art_i] = layers[art_i].fit(
+            layers[art_i] = layer.fit(
                 X[art_i],
                 y_i,
                 max_iter=max_iter,
                 match_tracking=match_tracking,
                 epsilon=epsilon,
             )
-
+        self._invalidate_layer_map_cache()
         return self
 
     def partial_fit(
@@ -364,7 +406,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         if y is not None:
             if len(self.layers) == 0:
                 self.is_supervised = True
-                self.layers = [SimpleARTMAP(modules[i]) for i in range(self.n_modules)]
+                self.layers = [SimpleARTMAP(modules[i]) for i in range(self._n_modules_cached)]
             assert self.is_supervised, (
                 "Labels were previously provided. "
                 "Must continue to provide labels for partial fit."
@@ -377,13 +419,13 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             if len(self.layers) == 0:
                 self.is_supervised = False
                 assert (
-                    self.n_modules >= 2
+                    self._n_modules_cached >= 2
                 ), "Must provide at least two ART modules when providing cluster labels"
                 self.layers = cast(
                     list[BaseARTMAP], [ARTMAP(modules[1], modules[0])]
                 ) + cast(
                     list[BaseARTMAP],
-                    [SimpleARTMAP(modules[i]) for i in range(2, self.n_modules)],
+                    [SimpleARTMAP(modules[i]) for i in range(2, self._n_modules_cached)],
                 )
             assert not self.is_supervised, (
                 "Labels were not previously provided. "
@@ -400,15 +442,16 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
 
         n_samples = X[0].shape[0]
         layers = self.layers
-        for art_i in range(1, len(layers)):
+        for art_i, layer in enumerate(layers[1:], start=1):
             y_i = layers[art_i - 1].labels_a[-n_samples:]
-            layers[art_i] = layers[art_i].partial_fit(
+            layers[art_i] = layer.partial_fit(
                 X[x_i],
                 y_i,
                 match_tracking=match_tracking,
                 epsilon=epsilon,
             )
             x_i += 1
+        self._invalidate_layer_map_cache()
         return self
 
     def predict(
@@ -433,9 +476,13 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             x = X[-1]
         else:
             x = X
-        pred_a, pred_b = self.layers[-1].predict_ab(x, clip=clip)
-        pred = [pred_a, pred_b]
-        for layer in reversed(self.layers[:-1]):
-            pred.append(layer.map_a2b(pred[-1]))
-
-        return pred[::-1]
+        layers = self.layers
+        n_layers = len(layers)
+        pred: list[Optional[np.ndarray]] = [None] * (n_layers + 1)
+        pred_a, pred_b = layers[-1].predict_ab(x, clip=clip)
+        pred[n_layers - 1] = pred_a
+        pred[n_layers] = pred_b
+        for i in range(n_layers - 2, -1, -1):
+            assert pred[i + 1] is not None
+            pred[i] = self._map_layer_labels(i, cast(np.ndarray, pred[i + 1]))
+        return [cast(np.ndarray, p) for p in pred]

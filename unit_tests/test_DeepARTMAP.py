@@ -152,3 +152,20 @@ def test_map_deep_negative_level(deep_artmap_model):
     y_last = deep_artmap_model.layers[-1].labels_a[0]
     mapped = deep_artmap_model.map_deep(-1, y_last)
     assert isinstance(mapped.tolist(), int)
+
+
+def test_predict_layer_map_cache_parity(deep_artmap_model):
+    X = [np.random.rand(12, 5), np.random.rand(12, 5)]
+    X_prep, _ = deep_artmap_model.prepare_data(X)
+    deep_artmap_model.fit(X_prep, max_iter=1)
+
+    pred = deep_artmap_model.predict(X_prep)
+    if len(deep_artmap_model.layers) == 1:
+        assert len(deep_artmap_model._layer_map_cache) == 0
+        return
+
+    assert len(deep_artmap_model._layer_map_cache) >= 1
+    for i, layer in enumerate(deep_artmap_model.layers[:-1]):
+        mapped = deep_artmap_model._map_layer_labels(i, pred[i + 1])
+        expected = layer.map_a2b(pred[i + 1])
+        assert np.array_equal(mapped, expected)
