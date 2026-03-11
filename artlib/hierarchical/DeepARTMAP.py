@@ -51,7 +51,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         self._n_modules_cached = len(modules)
         self.layers: list[BaseARTMAP] = []
         self.is_supervised: Optional[bool] = None
-        self._layer_map_cache: dict[int, tuple[tuple[int, int, int], np.ndarray]] = {}
+        self._layer_map_cache: dict[int, tuple[tuple[int, int, int, int], np.ndarray]] = {}
 
     def get_params(self, deep: bool = True) -> dict:
         """Get parameters for this estimator.
@@ -191,17 +191,24 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             level += len(self.layers)
         y_b = y_a
         for i in range(level, -1, -1):
-            y_b = self.layers[i].map_a2b(y_b)
+            if isinstance(y_b, np.ndarray):
+                y_b = self._map_layer_labels(i, y_b)
+            else:
+                y_b = self.layers[i].map_a2b(y_b)
         return y_b
 
     def _invalidate_layer_map_cache(self):
         self._layer_map_cache.clear()
 
     @staticmethod
-    def _map_signature(layer: BaseARTMAP) -> tuple[int, int, int]:
+    def _map_signature(layer: BaseARTMAP) -> tuple[int, int, int, int]:
         if len(layer.map) == 0:
-            return (id(layer.map), 0, -1)
-        return (id(layer.map), len(layer.map), int(max(layer.map)))
+            return (id(layer.map), 0, -1, 0)
+        max_key = int(max(layer.map))
+        checksum = 0
+        for k, v in layer.map.items():
+            checksum ^= ((int(k) * 1315423911) ^ (int(v) * 2654435761)) & 0xFFFFFFFF
+        return (id(layer.map), len(layer.map), max_key, checksum)
 
     def _get_layer_map_array(self, layer_idx: int) -> Optional[np.ndarray]:
         layer = self.layers[layer_idx]

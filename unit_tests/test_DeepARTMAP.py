@@ -154,6 +154,20 @@ def test_map_deep_negative_level(deep_artmap_model):
     assert isinstance(mapped.tolist(), int)
 
 
+def test_map_deep_array_matches_layer_chain(deep_artmap_model):
+    X = [np.random.rand(15, 5), np.random.rand(15, 5)]
+    X_prep, _ = deep_artmap_model.prepare_data(X)
+    deep_artmap_model.fit(X_prep, max_iter=1)
+
+    y_last = deep_artmap_model.layers[-1].labels_a
+    mapped = deep_artmap_model.map_deep(-1, y_last)
+
+    expected = y_last
+    for layer in reversed(deep_artmap_model.layers):
+        expected = layer.map_a2b(expected)
+    assert np.array_equal(mapped, expected)
+
+
 def test_predict_layer_map_cache_parity(deep_artmap_model):
     X = [np.random.rand(12, 5), np.random.rand(12, 5)]
     X_prep, _ = deep_artmap_model.prepare_data(X)
@@ -169,3 +183,24 @@ def test_predict_layer_map_cache_parity(deep_artmap_model):
         mapped = deep_artmap_model._map_layer_labels(i, pred[i + 1])
         expected = layer.map_a2b(pred[i + 1])
         assert np.array_equal(mapped, expected)
+
+
+def test_layer_map_cache_refreshes_on_manual_map_value_change(deep_artmap_model):
+    X = [np.random.rand(12, 5), np.random.rand(12, 5)]
+    y = np.random.randint(0, 2, size=12)
+    X_prep, _ = deep_artmap_model.prepare_data(X)
+    deep_artmap_model.fit(X_prep, y=y, max_iter=1)
+
+    layer = deep_artmap_model.layers[0]
+    if len(layer.map) == 0:
+        pytest.skip("No layer map entries available for cache test.")
+    key = int(next(iter(layer.map.keys())))
+
+    arr_before = deep_artmap_model._get_layer_map_array(0)
+    assert arr_before is not None
+    old_val = int(layer.map[key])
+    layer.map[key] = old_val + 1
+
+    arr_after = deep_artmap_model._get_layer_map_array(0)
+    assert arr_after is not None
+    assert int(arr_after[key]) == old_val + 1
