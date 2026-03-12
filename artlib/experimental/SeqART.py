@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Optional, Callable, Tuple, Union, Dict
-from artlib import BaseART
+from artlib.common.BaseART import BaseART
 import operator
 import re
 
