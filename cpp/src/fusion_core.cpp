@@ -1,5 +1,6 @@
 #include "artlib_cpp/fusion_core.hpp"
 
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -87,6 +88,49 @@ int ArgmaxWeightedChannelActivations(
         }
     }
     return best_idx;
+}
+
+void BuildStateActionRewardQuery(
+    const double* state,
+    std::size_t state_dim,
+    const double* actions,
+    std::size_t n_actions,
+    std::size_t action_dim,
+    std::size_t reward_dim,
+    double fill_value,
+    double* out
+) {
+    if (state == nullptr) {
+        throw std::invalid_argument("state cannot be null");
+    }
+    if (actions == nullptr) {
+        throw std::invalid_argument("actions cannot be null");
+    }
+    if (out == nullptr) {
+        throw std::invalid_argument("out cannot be null");
+    }
+    if (n_actions == 0) {
+        throw std::invalid_argument("n_actions must be > 0");
+    }
+    if (reward_dim == 0) {
+        throw std::invalid_argument("reward_dim must be > 0");
+    }
+
+    const std::size_t row_dim = state_dim + action_dim + reward_dim;
+    for (std::size_t i = 0; i < n_actions; ++i) {
+        double* row = out + (i * row_dim);
+        std::copy(state, state + state_dim, row);
+        std::copy(
+            actions + (i * action_dim),
+            actions + ((i + 1) * action_dim),
+            row + state_dim
+        );
+        std::fill(
+            row + state_dim + action_dim,
+            row + row_dim,
+            fill_value
+        );
+    }
 }
 
 }  // namespace artlib_cpp

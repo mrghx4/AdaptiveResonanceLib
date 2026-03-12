@@ -63,6 +63,40 @@ int ArgmaxWeightedChannelActivations(
     );
 }
 
+py::array_t<double> BuildStateActionRewardQuery(
+    py::array_t<double, py::array::c_style | py::array::forcecast> state,
+    py::array_t<double, py::array::c_style | py::array::forcecast> actions,
+    std::size_t reward_dim,
+    double fill_value
+) {
+    auto sb = state.request();
+    auto ab = actions.request();
+    if (sb.ndim != 1) throw std::runtime_error("state must be 1-D");
+    if (ab.ndim != 2) throw std::runtime_error("actions must be 2-D");
+    if (ab.shape[0] == 0) throw std::runtime_error("actions must have at least one row");
+    if (reward_dim == 0) throw std::runtime_error("reward_dim must be > 0");
+
+    const auto state_dim = static_cast<std::size_t>(sb.shape[0]);
+    const auto n_actions = static_cast<std::size_t>(ab.shape[0]);
+    const auto action_dim = static_cast<std::size_t>(ab.shape[1]);
+    const auto row_dim = state_dim + action_dim + reward_dim;
+
+    py::array_t<double> out({ab.shape[0], static_cast<py::ssize_t>(row_dim)});
+    auto ob = out.request();
+
+    artlib_cpp::BuildStateActionRewardQuery(
+        static_cast<const double*>(sb.ptr),
+        state_dim,
+        static_cast<const double*>(ab.ptr),
+        n_actions,
+        action_dim,
+        reward_dim,
+        fill_value,
+        static_cast<double*>(ob.ptr)
+    );
+    return out;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(cppFusionUtils, m) {
@@ -79,5 +113,13 @@ PYBIND11_MODULE(cppFusionUtils, m) {
         py::arg("channel_activations"),
         py::arg("gamma_values"),
         py::arg("skip_mask")
+    );
+    m.def(
+        "BuildStateActionRewardQuery",
+        &BuildStateActionRewardQuery,
+        py::arg("state"),
+        py::arg("actions"),
+        py::arg("reward_dim"),
+        py::arg("fill_value") = 0.5
     );
 }

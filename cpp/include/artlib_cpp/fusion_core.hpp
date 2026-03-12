@@ -20,4 +20,15 @@ int ArgmaxWeightedChannelActivations(
     const unsigned char* skip_mask
 );
 
+void BuildStateActionRewardQuery(
+    const double* state,
+    std::size_t state_dim,
+    const double* actions,
+    std::size_t n_actions,
+    std::size_t action_dim,
+    std::size_t reward_dim,
+    double fill_value,
+    double* out
+);
+
 }  // namespace artlib_cpp

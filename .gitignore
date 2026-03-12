@@ -5,3 +5,6 @@ __pycache__
 *.DS_Store
 .sklearn_data/
 *.egg-info/
+build/
+.pytest_cache/
+.mplconfig/

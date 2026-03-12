@@ -246,3 +246,39 @@ def test_default_action_queries_do_not_use_join_channel_data(monkeypatch, falcon
         states_prep[0, :], action_space=None
     )
     assert action_space.shape[0] == reward_values.shape[0]
+
+
+def test_external_action_queries_build_full_width_data(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    action_space = np.random.rand(3, 2)
+    prepared_actions = falcon_model.fusion_art.modules[1].prepare_data(action_space)
+    captured = {}
+
+    def _capture_predict(data, *args, **kwargs):
+        captured["data"] = np.array(data, copy=True)
+        return np.zeros((data.shape[0],), dtype=int)
+
+    monkeypatch.setattr(falcon_model.fusion_art, "predict", _capture_predict)
+    falcon_model.get_actions_and_rewards(states_prep[0, :], action_space=action_space)
+
+    assert captured["data"].shape == (
+        prepared_actions.shape[0],
+        sum(falcon_model.fusion_art.channel_dims),
+    )
+    np.testing.assert_allclose(
+        captured["data"][:, : falcon_model.fusion_art.channel_dims[0]],
+        np.repeat(states_prep[[0], :], prepared_actions.shape[0], axis=0),
+    )
+    state_dim = falcon_model.fusion_art.channel_dims[0]
+    action_dim = falcon_model.fusion_art.channel_dims[1]
+    np.testing.assert_allclose(
+        captured["data"][:, state_dim : state_dim + action_dim], prepared_actions
+    )
+    np.testing.assert_allclose(captured["data"][:, state_dim + action_dim :], 0.5)

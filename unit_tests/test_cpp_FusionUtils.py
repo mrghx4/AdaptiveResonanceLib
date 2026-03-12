@@ -42,3 +42,30 @@ def test_argmax_weighted_channel_activations_matches_matrix_variant():
     activ = channel_activ.T.copy()  # (n_categories, n_channels)
     idx_matrix = cpp_fusion_utils.ArgmaxWeightedActivations(activ, gamma, skip_mask)
     assert int(idx_channel) == int(idx_matrix)
+
+
+def test_build_state_action_reward_query_matches_numpy():
+    state = np.array([0.2, 0.8, 0.1, 0.9], dtype=np.float64)
+    actions = np.array(
+        [
+            [0.0, 1.0, 0.3, 0.7],
+            [1.0, 0.0, 0.4, 0.6],
+        ],
+        dtype=np.float64,
+    )
+
+    out = cpp_fusion_utils.BuildStateActionRewardQuery(
+        state, actions, reward_dim=2, fill_value=0.5
+    )
+    expected = np.empty((2, 10), dtype=np.float64)
+    expected[:, :4] = state
+    expected[:, 4:8] = actions
+    expected[:, 8:] = 0.5
+    np.testing.assert_allclose(out, expected)
+
+
+def test_build_state_action_reward_query_rejects_invalid_shape():
+    state = np.ones((1, 4), dtype=np.float64)
+    actions = np.ones((2, 4), dtype=np.float64)
+    with pytest.raises(Exception):
+        cpp_fusion_utils.BuildStateActionRewardQuery(state, actions, reward_dim=2)

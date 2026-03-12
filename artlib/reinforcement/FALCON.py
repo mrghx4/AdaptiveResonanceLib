@@ -15,6 +15,11 @@ from artlib.common.BaseART import BaseART
 from artlib.common.utils import complement_code, de_complement_code
 from artlib.fusion.FusionART import FusionART
 
+try:
+    from artlib.optimized.backends.cpp.cppFusionUtils import BuildStateActionRewardQuery
+except ImportError:
+    BuildStateActionRewardQuery = None
+
 
 class FALCON:
     """FALCON for Reinforcement Learning.
@@ -113,6 +118,13 @@ class FALCON:
     def _build_state_action_query(
         self, state: np.ndarray, action_space_prepared: np.ndarray
     ) -> np.ndarray:
+        if BuildStateActionRewardQuery is not None:
+            return BuildStateActionRewardQuery(
+                np.asarray(state, dtype=np.float64),
+                np.asarray(action_space_prepared, dtype=np.float64),
+                self.fusion_art.channel_dims[2],
+                0.5,
+            )
         state_dim = self.fusion_art.channel_dims[0]
         action_dim = self.fusion_art.channel_dims[1]
         reward_dim = self.fusion_art.channel_dims[2]
