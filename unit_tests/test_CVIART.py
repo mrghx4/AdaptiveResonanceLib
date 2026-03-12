@@ -97,3 +97,33 @@ def test_cviart_get_cluster_centers(cviart_model):
 
     assert len(centers) == 1
     assert np.allclose(centers[0], np.array([0.3, 0.5]))
+
+
+def test_cvi_match_uses_cached_baseline_validity(monkeypatch, cviart_model):
+    X = np.random.rand(10, 4)
+    cviart_model.data = X
+    cviart_model.labels_ = np.random.randint(0, 2, size=(10,))
+    w = np.random.rand(4)
+    cviart_model.base_module.W = [w, np.random.rand(4)]
+
+    calls = {"n": 0}
+
+    def _count_eval(*args, **kwargs):
+        calls["n"] += 1
+        return float(calls["n"])
+
+    monkeypatch.setattr(CVIART, "_evaluate_validity", staticmethod(_count_eval))
+    result = cviart_model.CVI_match(
+        X[0],
+        w,
+        1,
+        cviart_model.params,
+        {
+            "validity": CVIART.CALINSKIHARABASZ,
+            "index": 0,
+            "baseline_validity": 123.0,
+        },
+        {},
+    )
+    assert isinstance(result, np.bool_)
+    assert calls["n"] == 1

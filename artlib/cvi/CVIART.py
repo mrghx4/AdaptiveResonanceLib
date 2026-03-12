@@ -47,7 +47,6 @@ class CVIART(BaseART):
         self.base_module = base_module
         params = dict(base_module.params, **{"validity": validity})
         super().__init__(params)
-        print(self.params)
 
     def validate_params(self, params: dict):
         """Validate clustering parameters.
@@ -158,7 +157,9 @@ class CVIART(BaseART):
         if len(self.W) < 2:
             return True
 
-        old_VI = self._evaluate_validity(self.data, self.labels_, extra["validity"])
+        old_VI = extra.get("baseline_validity")
+        if old_VI is None:
+            old_VI = self._evaluate_validity(self.data, self.labels_, extra["validity"])
         new_labels = np.copy(self.labels_)
         new_labels[extra["index"]] = c_
         new_VI = self._evaluate_validity(self.data, new_labels, extra["validity"])
@@ -276,6 +277,11 @@ class CVIART(BaseART):
         for _ in range(max_iter):
             for index, x in enumerate(X):
                 self.pre_step_fit(X)
+                baseline_validity = None
+                if len(self.W) >= 2:
+                    baseline_validity = self._evaluate_validity(
+                        self.data, self.labels_, self.params["validity"]
+                    )
                 if match_reset_func is None:
                     cvi_match_reset_func = (
                         lambda i, w, cluster_a, params, cache: self.CVI_match(
@@ -286,6 +292,7 @@ class CVIART(BaseART):
                             {
                                 "index": index,
                                 "validity": self.params["validity"],
+                                "baseline_validity": baseline_validity,
                             },
                             cache,
                         )
@@ -301,6 +308,7 @@ class CVIART(BaseART):
                             {
                                 "index": index,
                                 "validity": self.params["validity"],
+                                "baseline_validity": baseline_validity,
                             },
                             cache,
                         )

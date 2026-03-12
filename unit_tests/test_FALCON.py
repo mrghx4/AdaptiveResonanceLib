@@ -227,3 +227,22 @@ def test_action_space_cache_invalidates_after_partial_fit(monkeypatch, falcon_mo
     falcon_model.partial_fit(states_prep[:4], actions_prep[:4], rewards_prep[:4])
     falcon_model.get_actions_and_rewards(states_prep[1, :], action_space=None)
     assert calls["n"] >= 1
+
+
+def test_default_action_queries_do_not_use_join_channel_data(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    def _fail_join(*args, **kwargs):
+        raise AssertionError("join_channel_data should not be used for default action queries")
+
+    monkeypatch.setattr(falcon_model.fusion_art, "join_channel_data", _fail_join)
+    action_space, reward_values = falcon_model.get_actions_and_rewards(
+        states_prep[0, :], action_space=None
+    )
+    assert action_space.shape[0] == reward_values.shape[0]

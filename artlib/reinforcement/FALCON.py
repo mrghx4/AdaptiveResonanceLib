@@ -67,6 +67,7 @@ class FALCON:
         self._reward_centers_sig: Optional[int] = None
         self._action_space_cache: Optional[np.ndarray] = None
         self._action_space_prepared_cache: Optional[np.ndarray] = None
+        self._action_query_template_cache: Optional[np.ndarray] = None
         self._action_space_sig: Optional[int] = None
 
     def _reward_centers_array(self) -> np.ndarray:
@@ -76,25 +77,67 @@ class FALCON:
             self._reward_centers_sig = sig
         return self._reward_centers_cache
 
-    def _default_action_space(self) -> tuple[np.ndarray, np.ndarray]:
+    def _default_action_space(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         sig = len(self.fusion_art.modules[1].W)
         if (
             self._action_space_cache is None
             or self._action_space_prepared_cache is None
+            or self._action_query_template_cache is None
             or self._action_space_sig != sig
         ):
             self._action_space_cache = np.asarray(self.fusion_art.get_channel_centers(1))
             self._action_space_prepared_cache = self.fusion_art.modules[1].prepare_data(
                 self._action_space_cache
             )
+            state_dim = self.fusion_art.channel_dims[0]
+            action_dim = self.fusion_art.channel_dims[1]
+            reward_dim = self.fusion_art.channel_dims[2]
+            self._action_query_template_cache = np.empty(
+                (
+                    self._action_space_prepared_cache.shape[0],
+                    state_dim + action_dim + reward_dim,
+                ),
+                dtype=self._action_space_prepared_cache.dtype,
+            )
+            self._action_query_template_cache[:, state_dim : state_dim + action_dim] = (
+                self._action_space_prepared_cache
+            )
+            self._action_query_template_cache[:, state_dim + action_dim :] = 0.5
             self._action_space_sig = sig
-        return self._action_space_cache, self._action_space_prepared_cache
+        return (
+            self._action_space_cache,
+            self._action_space_prepared_cache,
+            self._action_query_template_cache,
+        )
+
+    def _build_state_action_query(
+        self, state: np.ndarray, action_space_prepared: np.ndarray
+    ) -> np.ndarray:
+        state_dim = self.fusion_art.channel_dims[0]
+        action_dim = self.fusion_art.channel_dims[1]
+        reward_dim = self.fusion_art.channel_dims[2]
+        data = np.empty(
+            (action_space_prepared.shape[0], state_dim + action_dim + reward_dim),
+            dtype=action_space_prepared.dtype,
+        )
+        data[:, :state_dim] = state
+        data[:, state_dim : state_dim + action_dim] = action_space_prepared
+        data[:, state_dim + action_dim :] = 0.5
+        return data
+
+    def _build_default_state_action_query(self, state: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        action_space, _, template = self._default_action_space()
+        data = np.array(template, copy=True)
+        state_dim = self.fusion_art.channel_dims[0]
+        data[:, :state_dim] = state
+        return action_space, data
 
     def _invalidate_center_caches(self):
         self._reward_centers_cache = None
         self._reward_centers_sig = None
         self._action_space_cache = None
         self._action_space_prepared_cache = None
+        self._action_query_template_cache = None
         self._action_space_sig = None
 
     def prepare_data(
@@ -215,15 +258,11 @@ class FALCON:
         """
         reward_centers_arr = self._reward_centers_array()
         if action_space is None:
-            action_space, action_space_prepared = self._default_action_space()
+            action_space, data = self._build_default_state_action_query(state)
         else:
             action_space = np.asarray(action_space)
             action_space_prepared = self.fusion_art.modules[1].prepare_data(action_space)
-        n_actions = action_space_prepared.shape[0]
-        state_batch = np.repeat(state.reshape(1, -1), n_actions, axis=0)
-        data = self.fusion_art.join_channel_data(
-            [state_batch, action_space_prepared], skip_channels=self._reward_skip_channel
-        )
+            data = self._build_state_action_query(state, action_space_prepared)
         viable_clusters = self.fusion_art.predict(
             data, skip_channels=self._reward_skip_channel
         )

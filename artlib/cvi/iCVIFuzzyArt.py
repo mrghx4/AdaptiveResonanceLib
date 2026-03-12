@@ -150,27 +150,23 @@ class iCVIFuzzyART(FuzzyART):
                 params = self.iCVI.add_sample(x, 0)
                 self.iCVI.update(params)
 
+        if match_reset_func is None:
+            fit_match_reset_func = self.iCVI_match
+        else:
+            def fit_match_reset_func(x, w, c_, params, cache):
+                return match_reset_func(x, w, c_, params, cache) & self.iCVI_match(
+                    x, w, c_, params, cache
+                )
+
         for i, x in enumerate(X):
             self.pre_step_fit(X)
             self.index = i
-            if match_reset_func is None:
-                c = self.step_fit(
-                    x,
-                    match_reset_func=self.iCVI_match,
-                    match_tracking=match_tracking,
-                    epsilon=epsilon,
-                )
-            else:
-                match_reset_func_ = lambda x, w, c_, params, cache: (
-                    match_reset_func(x, w, c_, params, cache)
-                    & self.iCVI_match(x, w, c_, params, cache)
-                )
-                c = self.step_fit(
-                    x,
-                    match_reset_func=match_reset_func_,
-                    match_tracking=match_tracking,
-                    epsilon=epsilon,
-                )
+            c = self.step_fit(
+                x,
+                match_reset_func=fit_match_reset_func,
+                match_tracking=match_tracking,
+                epsilon=epsilon,
+            )
 
             if self.offline:
                 params = self.iCVI.switch_label(x, self.labels_[i], c)

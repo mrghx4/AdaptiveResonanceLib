@@ -63,6 +63,7 @@ def test_step_fit(bartmap_model):
 
     c_a = bartmap_model.step_fit(X_a, 0)
     assert isinstance(c_a, int)  # Ensure the result is an integer cluster label
+    assert bartmap_model._match_reset_extra is None
 
 
 def test_match_criterion_bin(bartmap_model):

@@ -70,6 +70,7 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self._cpp_average_available = AveragePearsonCorr is not None
         self._cpp_match_available = AnyClusterMatch is not None
         self._module_b_n_clusters_cached: Optional[int] = None
+        self._match_reset_extra: Optional[dict] = None
         self._reset_cpp_metric_cache()
 
     def __getattr__(self, key):
@@ -442,6 +443,17 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             match_state["any_cluster_match"] = False
         return False
 
+    def _step_match_reset_func(self, i, w, cluster, params, cache):
+        assert self._match_reset_extra is not None
+        return self.match_reset_func(
+            i,
+            w,
+            cluster,
+            params=params,
+            extra=self._match_reset_extra,
+            cache=cache,
+        )
+
     def step_fit(self, X: np.ndarray, k: int) -> int:
         """Fit the model to a single sample.
 
@@ -458,21 +470,13 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             The cluster label of the input sample.
 
         """
-        match_state: dict = {}
-        extra = {"k": k, "match_state": match_state}
-
-        def match_reset_func(i, w, cluster, params, cache):
-            return self.match_reset_func(
-                i,
-                w,
-                cluster,
-                params=params,
-                extra=extra,
-                cache=cache,
+        self._match_reset_extra = {"k": k, "match_state": {}}
+        try:
+            return self.module_a.step_fit(
+                X[k, :], match_reset_func=self._step_match_reset_func
             )
-
-        c_a = self.module_a.step_fit(X[k, :], match_reset_func=match_reset_func)
-        return c_a
+        finally:
+            self._match_reset_extra = None
 
     def fit(self, X: np.ndarray, max_iter=1):
         """Fit the model to the data.
