@@ -56,10 +56,11 @@ void GaussianARTMAPCore::fit(
     validate_x(x, rows, cols);
     if (dim_ == 0) dim_ = static_cast<int>(cols);
     labels_a_.assign(rows, 0);
+    double total_n = 0.0;
+    for (const auto& c : weights_) total_n += c.back();
 
     for (std::size_t i = 0; i < rows; ++i) {
-        std::vector<double> sample(x + i * cols, x + (i + 1) * cols);
-        labels_a_[i] = step_fit(sample, y[i]);
+        labels_a_[i] = step_fit(x + i * cols, y[i], total_n);
     }
 }
 
@@ -128,8 +129,8 @@ double GaussianARTMAPCore::match(const double* sample, const std::vector<double>
     return gaussian_exp(sample, w);
 }
 
-std::vector<double> GaussianARTMAPCore::update_weight(
-    const std::vector<double>& i, const std::vector<double>& w
+void GaussianARTMAPCore::update_weight_inplace(
+    const double* sample, std::vector<double>& w, double& total_n
 ) const {
     const double* mean = w.data();
     const double* sigma = w.data() + dim_;
@@ -138,10 +139,11 @@ std::vector<double> GaussianARTMAPCore::update_weight(
     const double n_new = n + 1.0;
     std::vector<double> mean_new(dim_), sigma_new(dim_);
     for (int j = 0; j < dim_; ++j) {
-        mean_new[j] = (1.0 - 1.0 / n_new) * mean[j] + (1.0 / n_new) * i[j];
+        mean_new[j] = (1.0 - 1.0 / n_new) * mean[j] + (1.0 / n_new) * sample[j];
         const double sigma2_old = sigma[j] * sigma[j];
         const double sigma2_new =
-            (1.0 - 1.0 / n_new) * sigma2_old + (1.0 / n_new) * std::pow(mean_new[j] - i[j], 2);
+            (1.0 - 1.0 / n_new) * sigma2_old +
+            (1.0 / n_new) * std::pow(mean_new[j] - sample[j], 2);
         sigma_new[j] = std::sqrt(sigma2_new);
     }
 
@@ -154,17 +156,15 @@ std::vector<double> GaussianARTMAPCore::update_weight(
     }
     const double sqrt_det_new = std::sqrt(det);
 
-    std::vector<double> out;
-    out.reserve(3 * dim_ + 2);
-    out.insert(out.end(), mean_new.begin(), mean_new.end());
-    out.insert(out.end(), sigma_new.begin(), sigma_new.end());
-    out.insert(out.end(), inv_sig_new.begin(), inv_sig_new.end());
-    out.push_back(sqrt_det_new);
-    out.push_back(n_new);
-    return out;
+    for (int j = 0; j < dim_; ++j) w[j] = mean_new[j];
+    for (int j = 0; j < dim_; ++j) w[dim_ + j] = sigma_new[j];
+    for (int j = 0; j < dim_; ++j) w[2 * dim_ + j] = inv_sig_new[j];
+    w[3 * dim_] = sqrt_det_new;
+    w[3 * dim_ + 1] = n_new;
+    total_n += 1.0;
 }
 
-std::vector<double> GaussianARTMAPCore::new_weight(const std::vector<double>& i) const {
+std::vector<double> GaussianARTMAPCore::new_weight(const double* sample) const {
     if (params_.sigma_init.size() != static_cast<std::size_t>(dim_)) {
         throw std::runtime_error("sigma_init dimension mismatch");
     }
@@ -179,7 +179,7 @@ std::vector<double> GaussianARTMAPCore::new_weight(const std::vector<double>& i)
 
     std::vector<double> w;
     w.reserve(3 * dim_ + 2);
-    w.insert(w.end(), i.begin(), i.end());
+    w.insert(w.end(), sample, sample + dim_);
     w.insert(w.end(), params_.sigma_init.begin(), params_.sigma_init.end());
     w.insert(w.end(), inv_sig.begin(), inv_sig.end());
     w.push_back(sqrt_det);
@@ -205,22 +205,20 @@ bool GaussianARTMAPCore::matches_vigilance(double m) const {
     throw std::invalid_argument("Invalid MT mode");
 }
 
-int GaussianARTMAPCore::step_fit(const std::vector<double>& sample, int c_b) {
+int GaussianARTMAPCore::step_fit(const double* sample, int c_b, double& total_n) {
     reset_rho();
     if (weights_.empty()) {
         weights_.push_back(new_weight(sample));
         cluster_map_[0] = c_b;
+        total_n += 1.0;
         return 0;
     }
-
-    double total_n = 0.0;
-    for (const auto& c : weights_) total_n += c.back();
 
     const std::size_t k = weights_.size();
     std::vector<double> t(k), m(k);
     for (std::size_t i = 0; i < k; ++i) {
-        t[i] = category_choice(sample.data(), weights_[i], total_n);
-        m[i] = match(sample.data(), weights_[i]);
+        t[i] = category_choice(sample, weights_[i], total_n);
+        m[i] = match(sample, weights_[i]);
     }
 
     std::vector<int> order;
@@ -237,7 +235,7 @@ int GaussianARTMAPCore::step_fit(const std::vector<double>& sample, int c_b) {
             if (!match_tracking(m[best])) break;
             continue;
         }
-        weights_[best] = update_weight(sample, weights_[best]);
+        update_weight_inplace(sample, weights_[best], total_n);
         cluster_map_[best] = c_b;
         return best;
     }
@@ -245,6 +243,7 @@ int GaussianARTMAPCore::step_fit(const std::vector<double>& sample, int c_b) {
     const int new_id = static_cast<int>(weights_.size());
     weights_.push_back(new_weight(sample));
     cluster_map_[new_id] = c_b;
+    total_n += 1.0;
     return new_id;
 }
 

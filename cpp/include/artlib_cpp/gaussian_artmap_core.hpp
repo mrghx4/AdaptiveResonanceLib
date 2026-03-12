@@ -44,13 +44,17 @@ public:
 private:
     void reset_rho();
     double gaussian_exp(const double* x, const std::vector<double>& w) const;
-    double category_choice(const double* sample, const std::vector<double>& w, double total_n) const;
+    double category_choice(
+        const double* sample, const std::vector<double>& w, double total_n
+    ) const;
     double match(const double* sample, const std::vector<double>& w) const;
-    std::vector<double> update_weight(const std::vector<double>& i, const std::vector<double>& w) const;
-    std::vector<double> new_weight(const std::vector<double>& i) const;
+    void update_weight_inplace(
+        const double* sample, std::vector<double>& w, double& total_n
+    ) const;
+    std::vector<double> new_weight(const double* sample) const;
     bool match_tracking(double m);
     bool matches_vigilance(double m) const;
-    int step_fit(const std::vector<double>& sample, int c_b);
+    int step_fit(const double* sample, int c_b, double& total_n);
     void validate_x(const double* x, std::size_t rows, std::size_t cols) const;
 
     GaussianARTMAPParams params_;

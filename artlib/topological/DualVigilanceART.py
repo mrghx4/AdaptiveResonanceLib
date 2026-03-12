@@ -9,6 +9,7 @@ from copy import deepcopy
 from matplotlib.axes import Axes
 from artlib.common.BaseART import BaseART
 from artlib.common.utils import IndexableOrKeyable
+from sklearn.utils.validation import check_is_fitted
 
 
 class DualVigilanceART(BaseART):
@@ -272,6 +273,28 @@ class DualVigilanceART(BaseART):
     def _deep_copy_params(self) -> dict:
         return deepcopy(self.base_module.params)
 
+    def _activation_order(
+        self, x: np.ndarray, params: dict
+    ) -> tuple[list[int], list[dict]]:
+        activations: list[tuple[float, int, dict]] = []
+        for idx, w in enumerate(self.base_module.W):
+            t_val, cache = self.base_module.category_choice(x, w, params=params)
+            if not np.isnan(t_val):
+                activations.append((float(t_val), idx, cache))
+        activations.sort(key=lambda item: (-item[0], item[1]))
+        return [idx for _, idx, _ in activations], [cache for _, _, cache in activations]
+
+    def _step_pred_label(self, x: np.ndarray) -> int:
+        params = self.base_module.params
+        best_idx = 0
+        best_t = -np.inf
+        for idx, w in enumerate(self.base_module.W):
+            t_val, _ = self.base_module.category_choice(x, w, params=params)
+            if t_val > best_t:
+                best_t = float(t_val)
+                best_idx = idx
+        return self.map[best_idx]
+
     def step_fit(
         self,
         x: np.ndarray,
@@ -312,28 +335,10 @@ class DualVigilanceART(BaseART):
             base_mod = self.base_module
             base_params_ref = base_mod.params
             lb_params = dict(base_params_ref, **{"rho": self.rho_lower_bound})
-            T_values, T_cache = zip(
-                *[
-                    base_mod.category_choice(x, w, params=base_params_ref)
-                    for w in base_mod.W
-                ]
-            )
-            T = np.array(T_values)
+            order, caches = self._activation_order(x, base_params_ref)
 
-            # Candidates are those with positive T (and not NaN)
-            valid = ~np.isnan(T)
-            if np.any(valid):
-                idx = np.arange(T.shape[0])[valid]
-                T_valid = T[valid]
-                order = idx[
-                    np.lexsort((idx, -T_valid))
-                ]  # primary: -T (desc), secondary: idx (asc)
-            else:
-                order = np.array([], dtype=int)
-
-            for c_ in order:
+            for c_, cache in zip(order, caches):
                 w = base_mod.W[c_]
-                cache = T_cache[c_]
                 m1, cache = base_mod.match_criterion_bin(
                     x,
                     w,
@@ -395,14 +400,20 @@ class DualVigilanceART(BaseART):
 
         """
         assert len(self.base_module.W) >= 0, "ART module is not fit."
-        T, _ = zip(
-            *[
-                self.base_module.category_choice(x, w, params=self.base_module.params)
-                for w in self.base_module.W
-            ]
-        )
-        c_ = int(np.argmax(T))
-        return self.map[c_]
+        return self._step_pred_label(x)
+
+    def predict(self, X: np.ndarray, clip: bool = False) -> np.ndarray:
+        check_is_fitted(self)
+        if clip:
+            X = np.clip(X, self.d_min_, self.d_max_)
+        self.validate_data(X)
+        self.check_dimensions(X)
+
+        y = np.empty((X.shape[0],), dtype=int)
+        step_pred = self._step_pred_label
+        for i, x in enumerate(X):
+            y[i] = step_pred(x)
+        return y
 
     def get_cluster_centers(self) -> List[np.ndarray]:
         """Get the centers of each cluster, used for regression.

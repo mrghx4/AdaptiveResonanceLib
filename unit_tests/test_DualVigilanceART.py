@@ -135,6 +135,16 @@ def test_step_pred(art_model):
     assert cluster_label == 0  # Predict should return the correct cluster
 
 
+def test_predict_matches_step_pred(art_model):
+    X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
+    art_model.step_fit(X[0])
+    art_model.is_fitted_ = True
+
+    pred = art_model.predict(X)
+    expected = np.array([art_model.step_pred(x) for x in X])
+    np.testing.assert_array_equal(pred, expected)
+
+
 def test_get_cluster_centers(art_model):
     # Test the get_cluster_centers method
     art_model.step_fit(np.array([0.1, 0.2]))  # Create the first cluster

@@ -79,6 +79,16 @@ def test_step_fit(topoart_model):
         assert isinstance(label, int)
 
 
+def test_predict_matches_step_pred(topoart_model):
+    X = np.random.rand(12, 2)
+    X_prep = topoart_model.prepare_data(X)
+    topoart_model.fit(X_prep, max_iter=1)
+
+    pred = topoart_model.predict(X_prep)
+    expected = np.array([topoart_model.step_pred(x) for x in X_prep])
+    np.testing.assert_array_equal(pred, expected)
+
+
 def test_adjacency_matrix(topoart_model):
     # Test that the adjacency matrix updates correctly
     np.random.seed(42)

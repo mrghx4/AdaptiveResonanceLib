@@ -13,6 +13,7 @@ from warnings import warn
 from copy import deepcopy
 from artlib.common.BaseART import BaseART
 from artlib.common.utils import IndexableOrKeyable
+from sklearn.utils.validation import check_is_fitted
 import operator
 
 
@@ -423,6 +424,28 @@ class TopoART(BaseART):
         """
         return deepcopy(self.base_module.params)
 
+    def _activation_order(
+        self, x: np.ndarray, params: dict
+    ) -> tuple[list[int], list[dict]]:
+        activations: list[tuple[float, int, dict]] = []
+        for idx, w in enumerate(self.W):
+            t_val, cache = self.category_choice(x, w, params=params)
+            if not np.isnan(t_val):
+                activations.append((float(t_val), idx, cache))
+        activations.sort(key=lambda item: (-item[0], item[1]))
+        return [idx for _, idx, _ in activations], [cache for _, _, cache in activations]
+
+    def _step_pred_label(self, x: np.ndarray) -> int:
+        best_idx = 0
+        best_t = -np.inf
+        params = self.base_module.params
+        for idx, w in enumerate(self.W):
+            t_val, _ = self.category_choice(x, w, params=params)
+            if t_val > best_t:
+                best_t = float(t_val)
+                best_idx = idx
+        return best_idx
+
     def step_fit(
         self,
         x: np.ndarray,
@@ -461,25 +484,10 @@ class TopoART(BaseART):
             self._permanent_mask = np.zeros((1,), dtype=bool)
             return 0
         else:
-            T_values, T_cache = zip(
-                *[
-                    self.category_choice(x, w, params=self.base_module.params)
-                    for w in self.W
-                ]
-            )
-            T = np.array(T_values)
-            valid = ~np.isnan(T)
-            if np.any(valid):
-                idx = np.arange(T.shape[0])[valid]
-                T_valid = T[valid]
-                order = idx[np.lexsort((idx, -T_valid))]
-            else:
-                order = np.array([], dtype=int)
+            order, caches = self._activation_order(x, self.base_module.params)
 
-            for c_idx in order:
-                c_ = int(c_idx)
+            for c_, cache in zip(order, caches):
                 w = self.W[c_]
-                cache = T_cache[c_]
                 m, cache = self.match_criterion_bin(
                     x,
                     w,
@@ -540,6 +548,23 @@ class TopoART(BaseART):
 
         """
         return self.base_module.get_cluster_centers()
+
+    def step_pred(self, x) -> int:
+        assert len(self.W) >= 0, "ART module is not fit."
+        return self._step_pred_label(x)
+
+    def predict(self, X: np.ndarray, clip: bool = False) -> np.ndarray:
+        check_is_fitted(self)
+        if clip:
+            X = np.clip(X, self.d_min_, self.d_max_)
+        self.validate_data(X)
+        self.base_module.check_dimensions(X)
+
+        y = np.empty((X.shape[0],), dtype=int)
+        step_pred = self._step_pred_label
+        for i, x in enumerate(X):
+            y[i] = step_pred(x)
+        return y
 
     def plot_cluster_bounds(
         self, ax: Axes, colors: IndexableOrKeyable, linewidth: int = 1
