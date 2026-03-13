@@ -66,6 +66,7 @@ class DualVigilanceART(BaseART):
         self.map: dict[int, int] = dict()
         self._next_abstract_label = 0
         self._map_lookup_cache: Optional[np.ndarray] = None
+        self._map_lookup_sig: Optional[tuple[int, int, int, int]] = None
 
     def prepare_data(self, X: np.ndarray) -> np.ndarray:
         """Prepare data for clustering.
@@ -271,15 +272,33 @@ class DualVigilanceART(BaseART):
 
     def _invalidate_map_lookup_cache(self):
         self._map_lookup_cache = None
+        self._map_lookup_sig = None
+
+    @staticmethod
+    def _map_signature(map_: dict[int, int]) -> tuple[int, int, int, int]:
+        if len(map_) == 0:
+            return (id(map_), 0, -1, 0)
+        max_key = int(max(map_))
+        checksum = 0
+        for key, value in map_.items():
+            checksum ^= ((int(key) * 1315423911) ^ (int(value) * 2654435761)) & 0xFFFFFFFF
+        return (id(map_), len(map_), max_key, checksum)
 
     def _ensure_map_lookup_cache(self) -> np.ndarray:
         cache = self._map_lookup_cache
-        if cache is not None and cache.shape[0] == len(self.map):
+        sig = self._map_signature(self.map)
+        if cache is not None and self._map_lookup_sig == sig:
             return cache
-        cache = np.empty((len(self.map),), dtype=int)
+        if len(self.map) == 0:
+            cache = np.empty((0,), dtype=int)
+            self._map_lookup_cache = cache
+            self._map_lookup_sig = sig
+            return cache
+        cache = np.full((sig[2] + 1,), -1, dtype=int)
         for key, value in self.map.items():
             cache[int(key)] = int(value)
         self._map_lookup_cache = cache
+        self._map_lookup_sig = sig
         return cache
 
     def _set_params(self, new_params):
@@ -494,7 +513,18 @@ class DualVigilanceART(BaseART):
         try:
             base_pred = self.base_module.predict(X, clip=False)
             map_lookup = self._ensure_map_lookup_cache()
-            return map_lookup[np.asarray(base_pred, dtype=int)]
+            base_pred_i = np.asarray(base_pred, dtype=int)
+            if base_pred_i.size == 0:
+                return base_pred_i
+            if np.any(base_pred_i < 0):
+                raise ValueError("base prediction contains negative labels")
+            max_label = int(np.max(base_pred_i))
+            if max_label >= map_lookup.shape[0]:
+                raise ValueError("base prediction exceeds cached map lookup width")
+            mapped = map_lookup[base_pred_i]
+            if np.any(mapped < 0):
+                raise ValueError("base prediction contains unmapped labels")
+            return mapped
         except Exception:
             pass
 

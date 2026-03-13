@@ -201,6 +201,36 @@ def test_predict_reuses_cached_map_lookup(monkeypatch, art_model):
     assert calls["n"] == 1
 
 
+def test_predict_refreshes_cached_map_lookup_after_manual_value_change(art_model):
+    X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
+    art_model.base_module.W = [np.array([0.1, 0.2]), np.array([0.3, 0.4])]
+    art_model.map = {0: 5, 1: 9}
+    art_model.is_fitted_ = True
+
+    art_model.base_module.predict = lambda data, clip=False: np.array([0, 1, 0], dtype=int)
+    pred1 = art_model.predict(X)
+    np.testing.assert_array_equal(pred1, np.array([5, 9, 5]))
+
+    art_model.map[1] = 7
+    pred2 = art_model.predict(X)
+    np.testing.assert_array_equal(pred2, np.array([5, 7, 5]))
+
+
+def test_predict_batch_fast_path_handles_sparse_map_keys(monkeypatch, art_model):
+    X = np.array([[0.1, 0.2], [0.3, 0.4]])
+    art_model.base_module.W = [np.array([0.1, 0.2]), np.array([0.3, 0.4]), np.array([0.5, 0.6])]
+    art_model.map = {0: 5, 2: 9}
+    art_model.is_fitted_ = True
+
+    monkeypatch.setattr(
+        art_model.base_module,
+        "predict",
+        lambda data, clip=False: np.array([0, 2], dtype=int),
+    )
+    pred = art_model.predict(X)
+    np.testing.assert_array_equal(pred, np.array([5, 9]))
+
+
 def test_fit_resets_map_state(art_model):
     X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
     art_model.map = {99: 7}

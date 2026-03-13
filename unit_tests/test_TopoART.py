@@ -43,7 +43,6 @@ def test_get_cluster_centers(topoart_model):
     topoart_model.base_module.d_max_ = np.array([1.0, 1.0])
 
     centers = topoart_model.get_cluster_centers()
-    print(centers)
     assert len(centers) == 2
     assert np.allclose(centers[0], np.array([0.5, 0.5]))
     assert np.allclose(centers[1], np.array([0.3, 0.5]))
