@@ -476,6 +476,9 @@ class TopoART(BaseART):
         mt_operator = self._match_tracking_operator(match_tracking)
         self.sample_counter_ += 1
         resonant_c: int = -1
+        base_mod = self.base_module
+        base_params_ref = base_mod.params
+        user_match_reset = match_reset_func
 
         if len(self.W) == 0:
             new_w = self.new_weight(x, self.params)
@@ -484,37 +487,36 @@ class TopoART(BaseART):
             self._permanent_mask = np.zeros((1,), dtype=bool)
             return 0
         else:
-            order, caches = self._activation_order(x, self.base_module.params)
+            order, caches = self._activation_order(x, base_params_ref)
 
             for c_, cache in zip(order, caches):
                 w = self.W[c_]
                 m, cache = self.match_criterion_bin(
                     x,
                     w,
-                    params=self.base_module.params,
+                    params=base_params_ref,
                     cache=cache,
                     op=mt_operator,
                 )
-                no_match_reset = match_reset_func is None or match_reset_func(
-                    x, w, c_, params=self.base_module.params, cache=cache
+                no_match_reset = user_match_reset is None or user_match_reset(
+                    x, w, c_, params=base_params_ref, cache=cache
                 )
                 if m and no_match_reset:
                     if resonant_c < 0:
-                        params = self.base_module.params
+                        params = base_params_ref
+                        update_cache = cache
                     else:
-                        params = dict(
-                            self.base_module.params,
-                            **{"beta": self.params["beta_lower"]},
+                        params = dict(base_params_ref, **{"beta": self.params["beta_lower"]})
+                        update_cache = dict(
+                            (cache if cache else {}),
+                            **{"resonant_c": resonant_c, "current_c": c_},
                         )
                     # TODO: make compatible with DualVigilanceART
                     new_w = self.update(
                         x,
                         w,
                         params=params,
-                        cache=dict(
-                            (cache if cache else {}),
-                            **{"resonant_c": resonant_c, "current_c": c_},
-                        ),
+                        cache=update_cache,
                     )
                     self.set_weight(c_, new_w)
                     if resonant_c < 0:
@@ -553,12 +555,65 @@ class TopoART(BaseART):
         assert len(self.W) >= 0, "ART module is not fit."
         return self._step_pred_label(x)
 
+    def fit(
+        self,
+        X: np.ndarray,
+        y: Optional[np.ndarray] = None,
+        match_reset_func: Optional[Callable] = None,
+        max_iter=1,
+        match_tracking: Literal["MT+", "MT-", "MT0", "MT1", "MT~"] = "MT+",
+        epsilon: float = 0.0,
+        verbose: bool = False,
+        leave_progress_bar: bool = True,
+    ):
+        self.validate_data(X)
+        self.check_dimensions(X)
+        self.is_fitted_ = True
+
+        self.W = []
+        self.labels_ = np.zeros((X.shape[0],), dtype=int)
+        self.adjacency = np.zeros([], dtype=int)
+        self._permanent_mask = np.zeros([], dtype=bool)
+        self.sample_counter_ = 0
+        self.weight_sample_counter_ = []
+
+        labels = self.labels_
+        pre_step_fit = self.pre_step_fit
+        step_fit = self.step_fit
+        post_step_fit = self.post_step_fit
+
+        for _ in range(max_iter):
+            if verbose:
+                from tqdm import tqdm
+
+                x_iter = tqdm(
+                    enumerate(X), total=int(X.shape[0]), leave=leave_progress_bar
+                )
+            else:
+                x_iter = enumerate(X)
+            for i, x in x_iter:
+                pre_step_fit(X)
+                labels[i] = step_fit(
+                    x,
+                    match_reset_func=match_reset_func,
+                    match_tracking=match_tracking,
+                    epsilon=epsilon,
+                )
+                post_step_fit(X)
+        self.post_fit(X)
+        return self
+
     def predict(self, X: np.ndarray, clip: bool = False) -> np.ndarray:
         check_is_fitted(self)
         if clip:
             X = np.clip(X, self.d_min_, self.d_max_)
         self.validate_data(X)
         self.base_module.check_dimensions(X)
+
+        try:
+            return self.base_module.predict(X, clip=False)
+        except Exception:
+            pass
 
         y = np.empty((X.shape[0],), dtype=int)
         step_pred = self._step_pred_label

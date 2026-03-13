@@ -244,3 +244,36 @@ def test_fit_rows_columns_layout_matches_reference(bartmap_model):
     )
     assert np.array_equal(bartmap_model.rows_, rows_ref)
     assert np.array_equal(bartmap_model.columns_, cols_ref)
+
+
+def test_step_fit_reuses_match_reset_state(bartmap_model):
+    X = np.random.rand(12, 12)
+    bartmap_model.X = X
+
+    X_a = bartmap_model.module_a.prepare_data(X)
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+    seen_state_ids = []
+    seen_callback_ids = []
+
+    def _capture_step_fit(x, match_reset_func=None, **kwargs):
+        seen_state_ids.append(id(bartmap_model._match_reset_extra))
+        seen_callback_ids.append(id(match_reset_func))
+        return 0
+
+    bartmap_model.module_a.step_fit = _capture_step_fit
+
+    state_id_1 = id(bartmap_model._match_reset_state)
+    callback_id_1 = id(bartmap_model._step_match_reset_func_cached)
+    bartmap_model.step_fit(X_a, 0)
+    state_id_2 = id(bartmap_model._match_reset_state)
+    callback_id_2 = id(bartmap_model._step_match_reset_func_cached)
+    bartmap_model.step_fit(X_a, 1)
+
+    assert bartmap_model._match_reset_extra is None
+    assert len(seen_state_ids) == 2
+    assert len(seen_callback_ids) == 2
+    assert len(set(seen_state_ids)) == 1
+    assert len(set(seen_callback_ids)) == 1
+    assert id(bartmap_model._match_reset_state) == state_id_1 == state_id_2
+    assert id(bartmap_model._step_match_reset_func_cached) == callback_id_1 == callback_id_2

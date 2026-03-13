@@ -29,6 +29,7 @@ class MockBaseART(BaseART):
 
     def add_weight(self, w: np.ndarray):
         self.W.append(w)
+        self.weight_sample_counter_.append(1)
 
     def category_choice(
         self, i: np.ndarray, w: np.ndarray, params: dict
@@ -151,3 +152,31 @@ def test_get_cluster_centers(art_model):
     centers = art_model.get_cluster_centers()
     assert len(centers) == 1
     assert np.array_equal(centers[0], np.array([0.1, 0.2]))
+
+
+def test_predict_uses_base_module_batch_predict(monkeypatch, art_model):
+    X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
+    art_model.base_module.W = [np.array([0.1, 0.2]), np.array([0.3, 0.4])]
+    art_model.map = {0: 5, 1: 9}
+    art_model.is_fitted_ = True
+
+    calls = {"n": 0}
+
+    def _predict_batch(data, clip=False):
+        calls["n"] += 1
+        return np.array([0, 1, 0], dtype=int)
+
+    monkeypatch.setattr(art_model.base_module, "predict", _predict_batch)
+    pred = art_model.predict(X)
+    np.testing.assert_array_equal(pred, np.array([5, 9, 5]))
+    assert calls["n"] == 1
+
+
+def test_fit_resets_map_state(art_model):
+    X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
+    art_model.map = {99: 7}
+    art_model._next_abstract_label = 42
+    art_model.fit(X, max_iter=1)
+    assert 99 not in art_model.map
+    assert art_model.labels_.shape[0] == X.shape[0]
+    assert art_model._next_abstract_label >= 1

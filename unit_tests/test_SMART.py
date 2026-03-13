@@ -53,3 +53,30 @@ def test_partial_fit(smart_model):
     smart_model.partial_fit(X_prep)
 
     assert smart_model.modules[0].labels_.shape[0] == X.shape[0]
+
+
+def test_plot_cluster_bounds_vectorizes_map_deep(monkeypatch, smart_model):
+    X = np.random.rand(12, 5)
+    X_prep = smart_model.prepare_data(X)
+    smart_model.fit(X_prep, max_iter=1)
+
+    calls = {"n": 0}
+    orig_map_deep = smart_model.map_deep
+
+    def _count_map_deep(level, labels):
+        calls["n"] += 1
+        return orig_map_deep(level, labels)
+
+    monkeypatch.setattr(smart_model, "map_deep", _count_map_deep)
+    ax = type("DummyAxes", (), {})()
+
+    captured = []
+
+    def _capture_plot_cluster_bounds(self, _ax, layer_colors, linewidth):
+        captured.append((len(layer_colors), linewidth))
+
+    monkeypatch.setattr(FuzzyART, "plot_cluster_bounds", _capture_plot_cluster_bounds)
+    smart_model.plot_cluster_bounds(ax, colors=list(range(64)), linewidth=2)
+
+    assert len(captured) == smart_model.n_modules
+    assert calls["n"] == max(0, smart_model.n_modules - 1)

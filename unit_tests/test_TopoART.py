@@ -142,3 +142,31 @@ def test_prune_is_silent(topoart_model, capsys):
     topoart_model.prune(X)
     captured = capsys.readouterr()
     assert captured.out == ""
+
+
+def test_predict_uses_base_module_batch_predict(monkeypatch, topoart_model):
+    X = np.random.rand(6, 2)
+    X_prep = topoart_model.prepare_data(X)
+    topoart_model.fit(X_prep, max_iter=1)
+
+    calls = {"n": 0}
+
+    def _predict_batch(data, clip=False):
+        calls["n"] += 1
+        return np.arange(data.shape[0], dtype=int) % max(1, topoart_model.base_module.n_clusters)
+
+    monkeypatch.setattr(topoart_model.base_module, "predict", _predict_batch)
+    pred = topoart_model.predict(X_prep)
+    assert pred.shape[0] == X_prep.shape[0]
+    assert calls["n"] == 1
+
+
+def test_fit_resets_topology_state(topoart_model):
+    X = np.random.rand(8, 2)
+    X_prep = topoart_model.prepare_data(X)
+    topoart_model.adjacency = np.ones((3, 3), dtype=int)
+    topoart_model._permanent_mask = np.ones((3,), dtype=bool)
+    topoart_model.fit(X_prep, max_iter=1)
+    assert topoart_model.labels_.shape[0] == X_prep.shape[0]
+    assert topoart_model.adjacency.shape[0] == topoart_model.adjacency.shape[1]
+    assert topoart_model._permanent_mask.shape[0] == topoart_model.adjacency.shape[0]

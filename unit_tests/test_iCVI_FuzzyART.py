@@ -68,10 +68,12 @@ def test_icvi_fuzzyart_iCVI_match(icvi_fuzzyart_model):
 
     x = X_prep[0]
     w = icvi_fuzzyart_model.W[0]
+    icvi_fuzzyart_model.index = 0
+    c = int(icvi_fuzzyart_model.labels_[0])
 
     # Test iCVI_match functionality
     result = icvi_fuzzyart_model.iCVI_match(
-        x, w, 0, icvi_fuzzyart_model.params, {}
+        x, w, c, icvi_fuzzyart_model.params, {}
     )
     assert isinstance(result, np.bool_)
 
@@ -98,3 +100,20 @@ def test_icvi_fuzzyart_fit_with_custom_reset_function(icvi_fuzzyart_model):
 
     assert len(icvi_fuzzyart_model.W) > 0
     assert icvi_fuzzyart_model.labels_.shape[0] == X.shape[0]
+
+
+def test_icvi_fuzzyart_fit_reuses_match_reset_wrapper(monkeypatch, icvi_fuzzyart_model):
+    X = np.random.rand(8, 4)
+    X_prep = icvi_fuzzyart_model.prepare_data(X)
+
+    wrapper_ids = []
+    orig_step_fit = FuzzyART.step_fit
+
+    def _capture_step_fit(self, x, match_reset_func=None, **kwargs):
+        wrapper_ids.append(id(match_reset_func))
+        return orig_step_fit(self, x, match_reset_func=match_reset_func, **kwargs)
+
+    monkeypatch.setattr(FuzzyART, "step_fit", _capture_step_fit)
+    icvi_fuzzyart_model.fit(X_prep, match_reset_func=lambda *args, **kwargs: True)
+    assert len(wrapper_ids) == X_prep.shape[0]
+    assert len(set(wrapper_ids)) == 1

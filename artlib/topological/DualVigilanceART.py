@@ -64,6 +64,7 @@ class DualVigilanceART(BaseART):
         super().__init__(params)
         self.rho_lower_bound = rho_lower_bound
         self.map: dict[int, int] = dict()
+        self._next_abstract_label = 0
 
     def prepare_data(self, X: np.ndarray) -> np.ndarray:
         """Prepare data for clustering.
@@ -326,16 +327,19 @@ class DualVigilanceART(BaseART):
         base_params = self._deep_copy_params()
         mt_operator = self._match_tracking_operator(match_tracking)
         self.sample_counter_ += 1
-        if len(self.base_module.W) == 0:
-            new_w = self.base_module.new_weight(x, self.base_module.params)
-            self.base_module.add_weight(new_w)
+        base_mod = self.base_module
+        base_params_ref = base_mod.params
+        if len(base_mod.W) == 0:
+            new_w = base_mod.new_weight(x, base_params_ref)
+            base_mod.add_weight(new_w)
             self.map[0] = 0
+            self._next_abstract_label = 1
             return 0
         else:
-            base_mod = self.base_module
-            base_params_ref = base_mod.params
             lb_params = dict(base_params_ref, **{"rho": self.rho_lower_bound})
             order, caches = self._activation_order(x, base_params_ref)
+            map_ = self.map
+            user_match_reset = match_reset_func
 
             for c_, cache in zip(order, caches):
                 w = base_mod.W[c_]
@@ -346,10 +350,11 @@ class DualVigilanceART(BaseART):
                     cache=cache,
                     op=mt_operator,
                 )
-                no_match_reset = match_reset_func is None or match_reset_func(
+                mapped_label = map_[c_]
+                no_match_reset = user_match_reset is None or user_match_reset(
                     x,
                     w,
-                    self.map[c_],
+                    mapped_label,
                     params=base_params_ref,
                     cache=cache,
                 )
@@ -359,7 +364,7 @@ class DualVigilanceART(BaseART):
                         new_w = base_mod.update(x, w, base_params_ref, cache=cache)
                         base_mod.set_weight(c_, new_w)
                         self._set_params(base_params)
-                        return self.map[c_]
+                        return mapped_label
                     else:
                         m2, _ = base_mod.match_criterion_bin(
                             x, w, params=lb_params, cache=cache, op=mt_operator
@@ -368,9 +373,9 @@ class DualVigilanceART(BaseART):
                             c_new = len(base_mod.W)
                             w_new = base_mod.new_weight(x, base_params_ref)
                             base_mod.add_weight(w_new)
-                            self.map[c_new] = self.map[c_]
+                            map_[c_new] = mapped_label
                             self._set_params(base_params)
-                            return self.map[c_new]
+                            return mapped_label
                 else:
                     keep_searching = self._match_tracking(
                         cache, epsilon, self.params, match_tracking
@@ -381,9 +386,11 @@ class DualVigilanceART(BaseART):
             c_new = len(self.base_module.W)
             w_new = base_mod.new_weight(x, base_params_ref)
             base_mod.add_weight(w_new)
-            self.map[c_new] = max(self.map.values()) + 1
+            new_label = self._next_abstract_label
+            self.map[c_new] = new_label
+            self._next_abstract_label = new_label + 1
             self._set_params(base_params)
-            return self.map[c_new]
+            return new_label
 
     def step_pred(self, x) -> int:
         """Predict the label for a single sample.
@@ -402,12 +409,66 @@ class DualVigilanceART(BaseART):
         assert len(self.base_module.W) >= 0, "ART module is not fit."
         return self._step_pred_label(x)
 
+    def fit(
+        self,
+        X: np.ndarray,
+        y: Optional[np.ndarray] = None,
+        match_reset_func: Optional[Callable] = None,
+        max_iter=1,
+        match_tracking: Literal["MT+", "MT-", "MT0", "MT1", "MT~"] = "MT+",
+        epsilon: float = 0.0,
+        verbose: bool = False,
+        leave_progress_bar: bool = True,
+    ):
+        self.validate_data(X)
+        self.check_dimensions(X)
+        self.is_fitted_ = True
+
+        self.W = []
+        self.labels_ = np.zeros((X.shape[0],), dtype=int)
+        self.map = {}
+        self._next_abstract_label = 0
+        self.sample_counter_ = 0
+        self.weight_sample_counter_ = []
+
+        labels = self.labels_
+        pre_step_fit = self.pre_step_fit
+        step_fit = self.step_fit
+        post_step_fit = self.post_step_fit
+
+        for _ in range(max_iter):
+            if verbose:
+                from tqdm import tqdm
+
+                x_iter = tqdm(
+                    enumerate(X), total=int(X.shape[0]), leave=leave_progress_bar
+                )
+            else:
+                x_iter = enumerate(X)
+            for i, x in x_iter:
+                pre_step_fit(X)
+                labels[i] = step_fit(
+                    x,
+                    match_reset_func=match_reset_func,
+                    match_tracking=match_tracking,
+                    epsilon=epsilon,
+                )
+                post_step_fit(X)
+        self.post_fit(X)
+        return self
+
     def predict(self, X: np.ndarray, clip: bool = False) -> np.ndarray:
         check_is_fitted(self)
         if clip:
             X = np.clip(X, self.d_min_, self.d_max_)
         self.validate_data(X)
         self.check_dimensions(X)
+
+        try:
+            base_pred = self.base_module.predict(X, clip=False)
+            return np.array([self.map[int(c)] for c in base_pred], dtype=int)
+        except Exception:
+            pass
 
         y = np.empty((X.shape[0],), dtype=int)
         step_pred = self._step_pred_label

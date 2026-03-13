@@ -71,6 +71,8 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self._cpp_match_available = AnyClusterMatch is not None
         self._module_b_n_clusters_cached: Optional[int] = None
         self._match_reset_extra: Optional[dict] = None
+        self._match_reset_state = {"k": 0, "match_state": {}}
+        self._step_match_reset_func_cached = self._step_match_reset_func
         self._reset_cpp_metric_cache()
 
     def __getattr__(self, key):
@@ -470,10 +472,14 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             The cluster label of the input sample.
 
         """
-        self._match_reset_extra = {"k": k, "match_state": {}}
+        state = self._match_reset_state
+        state["k"] = k
+        match_state = state["match_state"]
+        match_state.clear()
+        self._match_reset_extra = state
         try:
             return self.module_a.step_fit(
-                X[k, :], match_reset_func=self._step_match_reset_func
+                X[k, :], match_reset_func=self._step_match_reset_func_cached
             )
         finally:
             self._match_reset_extra = None
@@ -507,14 +513,17 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         # init module A
         module_a = self.module_a
         module_a.W = []
-        module_a.labels_ = np.zeros((X.shape[0],), dtype=int)
+        labels = np.zeros((X.shape[0],), dtype=int)
+        module_a.labels_ = labels
+        pre_step_fit = module_a.pre_step_fit
+        post_step_fit = module_a.post_step_fit
+        step_fit = self.step_fit
 
         for _ in range(max_iter):
             for k in range(n):
-                module_a.pre_step_fit(X_a)
-                c_a = self.step_fit(X_a, k)
-                module_a.labels_[k] = c_a
-                module_a.post_step_fit(X_a)
+                pre_step_fit(X_a)
+                labels[k] = step_fit(X_a, k)
+                post_step_fit(X_a)
 
         n_row_clusters = module_a.n_clusters
         row_labels = self.row_labels_

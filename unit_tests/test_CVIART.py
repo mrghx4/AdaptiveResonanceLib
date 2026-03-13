@@ -127,3 +127,20 @@ def test_cvi_match_uses_cached_baseline_validity(monkeypatch, cviart_model):
     )
     assert isinstance(result, np.bool_)
     assert calls["n"] == 1
+
+
+def test_cviart_fit_reuses_match_reset_wrapper(monkeypatch, cviart_model):
+    X = np.random.rand(8, 4)
+    X_prep = cviart_model.prepare_data(X)
+
+    wrapper_ids = []
+    orig_step_fit = cviart_model.base_module.step_fit
+
+    def _capture_step_fit(x, match_reset_func=None, **kwargs):
+        wrapper_ids.append(id(match_reset_func))
+        return orig_step_fit(x, match_reset_func=match_reset_func, **kwargs)
+
+    monkeypatch.setattr(cviart_model.base_module, "step_fit", _capture_step_fit)
+    cviart_model.fit(X_prep, max_iter=1)
+    assert len(wrapper_ids) == X_prep.shape[0]
+    assert len(set(wrapper_ids)) == 1

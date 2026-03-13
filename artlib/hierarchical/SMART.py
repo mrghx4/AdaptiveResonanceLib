@@ -201,7 +201,10 @@ class SMART(DeepARTMAP):
             if j == 0:
                 layer_colors = [colors[k] for k in range(module.n_clusters)]
             else:
-                layer_colors = [colors[self.map_deep(j - 1, k)] for k in range(module.n_clusters)]
+                mapped_labels = self.map_deep(
+                    j - 1, np.arange(module.n_clusters, dtype=np.int32)
+                )
+                layer_colors = [colors[int(k)] for k in mapped_labels]
             module.plot_cluster_bounds(ax, layer_colors, linewidth)
 
     def visualize(

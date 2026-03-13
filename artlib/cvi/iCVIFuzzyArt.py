@@ -70,6 +70,8 @@ class iCVIFuzzyART(FuzzyART):
             "validity"
         ] = validity  # Currently not used. Waiting for more algorithms.
         self.offline = offline
+        self._fit_match_reset_user: Optional[Callable] = None
+        self._fit_match_reset_func = self._fit_match_reset_wrapper
         assert "validity" in self.params
         assert isinstance(self.params["validity"], int)
 
@@ -104,6 +106,13 @@ class iCVIFuzzyART(FuzzyART):
         # and it handles if this is true or false.
         return new["criterion_value"] > self.iCVI.criterion_value
         # return self.iCVI.evalLabel(x, c_) This except pass params instead.
+
+    def _fit_match_reset_wrapper(self, x, w, c_, params, cache):
+        if self._fit_match_reset_user is not None and not self._fit_match_reset_user(
+            x, w, c_, params, cache
+        ):
+            return False
+        return self.iCVI_match(x, w, c_, params, cache)
 
     # Could add max epochs back in, but only if offline is true,
     # or do something special...
@@ -150,20 +159,14 @@ class iCVIFuzzyART(FuzzyART):
                 params = self.iCVI.add_sample(x, 0)
                 self.iCVI.update(params)
 
-        if match_reset_func is None:
-            fit_match_reset_func = self.iCVI_match
-        else:
-            def fit_match_reset_func(x, w, c_, params, cache):
-                return match_reset_func(x, w, c_, params, cache) & self.iCVI_match(
-                    x, w, c_, params, cache
-                )
+        self._fit_match_reset_user = match_reset_func
 
         for i, x in enumerate(X):
             self.pre_step_fit(X)
             self.index = i
             c = self.step_fit(
                 x,
-                match_reset_func=fit_match_reset_func,
+                match_reset_func=self._fit_match_reset_func,
                 match_tracking=match_tracking,
                 epsilon=epsilon,
             )
@@ -176,3 +179,4 @@ class iCVIFuzzyART(FuzzyART):
 
             self.labels_[i] = c
             self.post_step_fit(X)
+        self._fit_match_reset_user = None

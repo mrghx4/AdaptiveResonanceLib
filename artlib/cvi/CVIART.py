@@ -47,6 +47,10 @@ class CVIART(BaseART):
         self.base_module = base_module
         params = dict(base_module.params, **{"validity": validity})
         super().__init__(params)
+        self._fit_match_reset_user: Optional[Callable] = None
+        self._fit_match_reset_index: Optional[int] = None
+        self._fit_match_reset_baseline: Optional[float] = None
+        self._fit_match_reset_func = self._fit_match_reset_wrapper
 
     def validate_params(self, params: dict):
         """Validate clustering parameters.
@@ -238,6 +242,18 @@ class CVIART(BaseART):
     def _deep_copy_params(self) -> dict:
         return deepcopy(self.base_module.params)
 
+    def _fit_match_reset_wrapper(self, i, w, cluster_a, params, cache):
+        extra = {
+            "index": self._fit_match_reset_index,
+            "validity": self.params["validity"],
+            "baseline_validity": self._fit_match_reset_baseline,
+        }
+        if self._fit_match_reset_user is not None and not self._fit_match_reset_user(
+            i, w, cluster_a, params, cache
+        ):
+            return False
+        return self.CVI_match(i, w, cluster_a, params, extra, cache)
+
     def fit(
         self,
         X: np.ndarray,
@@ -274,6 +290,7 @@ class CVIART(BaseART):
 
         self.W: list[np.ndarray] = []
         self.labels_ = np.zeros((X.shape[0],), dtype=int)
+        self._fit_match_reset_user = match_reset_func
         for _ in range(max_iter):
             for index, x in enumerate(X):
                 self.pre_step_fit(X)
@@ -282,45 +299,19 @@ class CVIART(BaseART):
                     baseline_validity = self._evaluate_validity(
                         self.data, self.labels_, self.params["validity"]
                     )
-                if match_reset_func is None:
-                    cvi_match_reset_func = (
-                        lambda i, w, cluster_a, params, cache: self.CVI_match(
-                            i,
-                            w,
-                            cluster_a,
-                            params,
-                            {
-                                "index": index,
-                                "validity": self.params["validity"],
-                                "baseline_validity": baseline_validity,
-                            },
-                            cache,
-                        )
-                    )
-                else:
-                    cvi_match_reset_func = lambda i, w, cluster_a, params, cache: (
-                        match_reset_func(i, w, cluster_a, params, cache)
-                        and self.CVI_match(
-                            i,
-                            w,
-                            cluster_a,
-                            params,
-                            {
-                                "index": index,
-                                "validity": self.params["validity"],
-                                "baseline_validity": baseline_validity,
-                            },
-                            cache,
-                        )
-                    )
+                self._fit_match_reset_index = index
+                self._fit_match_reset_baseline = baseline_validity
                 c = self.base_module.step_fit(
                     x,
-                    match_reset_func=cvi_match_reset_func,
+                    match_reset_func=self._fit_match_reset_func,
                     match_tracking=match_tracking,
                     epsilon=epsilon,
                 )
                 self.labels_[index] = c
                 self.post_step_fit(X)
+        self._fit_match_reset_user = None
+        self._fit_match_reset_index = None
+        self._fit_match_reset_baseline = None
 
     def pre_step_fit(self, X: np.ndarray):
         """Preprocessing step before fitting each sample.
