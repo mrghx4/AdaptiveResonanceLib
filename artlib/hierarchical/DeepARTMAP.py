@@ -13,9 +13,13 @@ from artlib.supervised.SimpleARTMAP import SimpleARTMAP
 from artlib.supervised.ARTMAP import ARTMAP
 
 try:
-    from artlib.optimized.backends.cpp.cppSimpleARTMAP import MapSimpleARTMAPLabelsChain
+    from artlib.optimized.backends.cpp.cppSimpleARTMAP import (
+        MapSimpleARTMAPLabelsChain,
+        MapSimpleARTMAPLabelsChainLevels,
+    )
 except ImportError:  # pragma: no cover - optional acceleration module
     MapSimpleARTMAPLabelsChain = None
+    MapSimpleARTMAPLabelsChainLevels = None
 
 
 class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
@@ -508,6 +512,25 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         pred_a, pred_b = layers[-1].predict_ab(x, clip=clip)
         pred[n_layers - 1] = pred_a
         pred[n_layers] = pred_b
+        if isinstance(pred_b, np.ndarray) and MapSimpleARTMAPLabelsChainLevels is not None:
+            chain = []
+            for i in range(n_layers - 2, -1, -1):
+                map_arr = self._get_layer_map_array(i)
+                if map_arr is None:
+                    chain = []
+                    break
+                chain.append(map_arr)
+            if chain:
+                try:
+                    mapped_levels = MapSimpleARTMAPLabelsChainLevels(
+                        np.ascontiguousarray(pred_b, dtype=np.int32),
+                        chain,
+                    )
+                    for offset, mapped in enumerate(mapped_levels, start=1):
+                        pred[n_layers - 1 - offset] = mapped
+                    return [cast(np.ndarray, p) for p in pred]
+                except Exception:
+                    pass
         for i in range(n_layers - 2, -1, -1):
             assert pred[i + 1] is not None
             pred[i] = self._map_layer_labels(i, cast(np.ndarray, pred[i + 1]))

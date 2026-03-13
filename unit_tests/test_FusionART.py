@@ -170,6 +170,19 @@ def test_predict_regression_multiple_target_channels(fusionart_model):
     assert pred[1].shape[0] == X_prep.shape[0]
 
 
+def test_predict_regression_multi_target_matches_cached_centers(fusionart_model):
+    X = [np.random.rand(12, 2), np.random.rand(12, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    labels = fusionart_model.predict(X_prep, skip_channels=[0, 1])
+    centers_0 = np.asarray(fusionart_model.get_channel_centers(0))
+    centers_1 = np.asarray(fusionart_model.get_channel_centers(1))
+    pred = fusionart_model.predict_regression(X_prep, target_channels=[0, 1])
+    np.testing.assert_allclose(pred[0], centers_0[labels], rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(pred[1], centers_1[labels], rtol=1e-10, atol=1e-12)
+
+
 def test_predict_regression_rejects_duplicate_target_channels(fusionart_model):
     X = [np.random.rand(8, 2), np.random.rand(8, 2)]
     X_prep = fusionart_model.prepare_data(X)

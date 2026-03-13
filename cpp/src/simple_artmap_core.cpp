@@ -61,6 +61,37 @@ std::vector<double> GatherClusterCenters(
     return out;
 }
 
+std::vector<std::vector<double>> GatherClusterCentersBatch(
+    const int* labels,
+    std::size_t n_labels,
+    const std::vector<const double*>& centers_list,
+    const std::vector<std::size_t>& n_centers_list,
+    const std::vector<std::size_t>& center_dims
+) {
+    if (labels == nullptr) {
+        throw std::invalid_argument("labels cannot be null");
+    }
+    if (centers_list.size() != n_centers_list.size() ||
+        centers_list.size() != center_dims.size()) {
+        throw std::invalid_argument("batch center metadata lengths must match");
+    }
+
+    std::vector<std::vector<double>> out;
+    out.reserve(centers_list.size());
+    for (std::size_t i = 0; i < centers_list.size(); ++i) {
+        out.push_back(
+            GatherClusterCenters(
+                labels,
+                n_labels,
+                centers_list[i],
+                n_centers_list[i],
+                center_dims[i]
+            )
+        );
+    }
+    return out;
+}
+
 std::vector<int> MapSimpleARTMAPLabelsChain(
     const int* labels,
     std::size_t n_labels,
@@ -82,6 +113,34 @@ std::vector<int> MapSimpleARTMAPLabelsChain(
             }
             out[i] = map_labels[static_cast<std::size_t>(c)];
         }
+    }
+    return out;
+}
+
+std::vector<std::vector<int>> MapSimpleARTMAPLabelsChainLevels(
+    const int* labels,
+    std::size_t n_labels,
+    const std::vector<std::vector<int>>& map_chain
+) {
+    if (labels == nullptr) {
+        throw std::invalid_argument("labels cannot be null");
+    }
+
+    std::vector<std::vector<int>> out;
+    out.reserve(map_chain.size());
+    std::vector<int> current(labels, labels + n_labels);
+    for (const auto& map_labels : map_chain) {
+        if (map_labels.empty()) {
+            throw std::invalid_argument("map chain entries must be non-empty");
+        }
+        for (std::size_t i = 0; i < n_labels; ++i) {
+            const int c = current[i];
+            if (c < 0 || static_cast<std::size_t>(c) >= map_labels.size()) {
+                throw std::out_of_range("label out of range for map chain");
+            }
+            current[i] = map_labels[static_cast<std::size_t>(c)];
+        }
+        out.push_back(current);
     }
     return out;
 }

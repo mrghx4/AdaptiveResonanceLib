@@ -27,9 +27,13 @@ except ImportError:  # pragma: no cover - optional acceleration module
     JoinChannelsWithFill = None
 
 try:
-    from artlib.optimized.backends.cpp.cppSimpleARTMAP import GatherClusterCenters
+    from artlib.optimized.backends.cpp.cppSimpleARTMAP import (
+        GatherClusterCenters,
+        GatherClusterCentersBatch,
+    )
 except ImportError:  # pragma: no cover - optional acceleration module
     GatherClusterCenters = None
+    GatherClusterCentersBatch = None
 
 
 def get_channel_position_tuples(
@@ -1012,9 +1016,26 @@ class FusionART(BaseART):
         target_channels = self._normalize_target_channels(target_channels)
         C = self.predict(X, clip=clip, skip_channels=target_channels)
         c_i32 = np.ascontiguousarray(C, dtype=np.int32)
+        cached_centers: list[Optional[np.ndarray]] = [
+            self._get_channel_centers_array_cached(channel) for channel in target_channels
+        ]
+        if (
+            GatherClusterCentersBatch is not None
+            and all(center is not None for center in cached_centers)
+        ):
+            gathered = GatherClusterCentersBatch(
+                c_i32,
+                [
+                    np.ascontiguousarray(center, dtype=np.float64)
+                    for center in cached_centers
+                    if center is not None
+                ],
+            )
+            if len(gathered) == 1:
+                return gathered[0]
+            return list(gathered)
         predictions = []
-        for channel in target_channels:
-            centers_arr = self._get_channel_centers_array_cached(channel)
+        for channel, centers_arr in zip(target_channels, cached_centers):
             if centers_arr is not None:
                 if GatherClusterCenters is not None:
                     pred = GatherClusterCenters(c_i32, centers_arr)

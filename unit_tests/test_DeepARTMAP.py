@@ -185,6 +185,24 @@ def test_predict_layer_map_cache_parity(deep_artmap_model):
         assert np.array_equal(mapped, expected)
 
 
+def test_predict_uses_chain_levels_fast_path_when_available(monkeypatch, deep_artmap_model):
+    X = [np.random.rand(12, 5), np.random.rand(12, 5)]
+    X_prep, _ = deep_artmap_model.prepare_data(X)
+    deep_artmap_model.fit(X_prep, max_iter=1)
+
+    calls = {"n": 0}
+    orig = deep_artmap_model._map_layer_labels
+
+    def _count_map(*args, **kwargs):
+        calls["n"] += 1
+        return orig(*args, **kwargs)
+
+    monkeypatch.setattr(deep_artmap_model, "_map_layer_labels", _count_map)
+    pred = deep_artmap_model.predict(X_prep)
+    assert pred[-1].shape[0] == X_prep[-1].shape[0]
+    assert calls["n"] == 0
+
+
 def test_layer_map_cache_refreshes_on_manual_map_value_change(deep_artmap_model):
     X = [np.random.rand(12, 5), np.random.rand(12, 5)]
     y = np.random.randint(0, 2, size=12)

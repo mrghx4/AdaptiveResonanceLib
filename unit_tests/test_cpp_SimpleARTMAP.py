@@ -44,6 +44,34 @@ def test_gather_cluster_centers_out_of_range_raises():
         cpp_simple_artmap.GatherClusterCenters(labels, centers)
 
 
+def test_gather_cluster_centers_batch():
+    labels = np.array([2, 0, 1], dtype=np.int32)
+    centers_a = np.array(
+        [
+            [10.0, 11.0],
+            [20.0, 21.0],
+            [30.0, 31.0],
+        ],
+        dtype=np.float64,
+    )
+    centers_b = np.array(
+        [
+            [1.0],
+            [2.0],
+            [3.0],
+        ],
+        dtype=np.float64,
+    )
+    out = cpp_simple_artmap.GatherClusterCentersBatch(labels, [centers_a, centers_b])
+    assert len(out) == 2
+    np.testing.assert_allclose(
+        out[0], np.array([[30.0, 31.0], [10.0, 11.0], [20.0, 21.0]], dtype=np.float64)
+    )
+    np.testing.assert_allclose(
+        out[1], np.array([[3.0], [1.0], [2.0]], dtype=np.float64)
+    )
+
+
 def test_map_simple_artmap_labels_chain():
     labels = np.array([0, 1, 2, 1], dtype=np.int32)
     map_chain = [
@@ -56,3 +84,18 @@ def test_map_simple_artmap_labels_chain():
     for m in map_chain:
         expected = m[expected]
     assert np.array_equal(out, expected)
+
+
+def test_map_simple_artmap_labels_chain_levels():
+    labels = np.array([0, 1, 2, 1], dtype=np.int32)
+    map_chain = [
+        np.array([2, 0, 1], dtype=np.int32),
+        np.array([1, 0, 2], dtype=np.int32),
+    ]
+    out = cpp_simple_artmap.MapSimpleARTMAPLabelsChainLevels(labels, map_chain)
+
+    assert len(out) == 2
+    expected = labels.copy()
+    for i, m in enumerate(map_chain):
+        expected = m[expected]
+        assert np.array_equal(out[i], expected)
