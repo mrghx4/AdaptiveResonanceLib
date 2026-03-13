@@ -218,6 +218,26 @@ def test_predict_regression_channel_centers_cache_reuse_and_invalidate(fusionart
     w0 = fusionart_model.W[0]
     fusionart_model.set_weight(0, w0)
     assert fusionart_model._channel_centers_cache == {}
+    assert fusionart_model._cluster_centers_cache is None
+
+
+def test_get_cluster_centers_cache_reuse_and_invalidate(fusionart_model):
+    X = [np.random.rand(18, 2), np.random.rand(18, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    centers1 = fusionart_model.get_cluster_centers()
+    assert fusionart_model._cluster_centers_cache is not None
+    cache_id_1 = id(fusionart_model._cluster_centers_cache)
+
+    centers2 = fusionart_model.get_cluster_centers()
+    cache_id_2 = id(fusionart_model._cluster_centers_cache)
+    assert cache_id_1 == cache_id_2
+    np.testing.assert_allclose(np.asarray(centers1), np.asarray(centers2))
+
+    w0 = fusionart_model.W[0]
+    fusionart_model.set_weight(0, w0)
+    assert fusionart_model._cluster_centers_cache is None
 
 
 def test_join_channel_data(fusionart_model):
@@ -291,6 +311,25 @@ def test_step_pred_cpp_argmax_path_matches_python(fusionart_model):
     pred_py = fusionart_model.step_pred(X_prep[0])
 
     assert int(pred_cpp) == int(pred_py)
+
+
+def test_predict_uses_single_active_channel_batch_predict(monkeypatch, fusionart_model):
+    X = [np.random.rand(12, 2), np.random.rand(12, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    calls = {"n": 0}
+
+    def _predict_batch(data, clip=False):
+        calls["n"] += 1
+        return np.arange(data.shape[0], dtype=int) % max(
+            1, fusionart_model.modules[0].n_clusters
+        )
+
+    monkeypatch.setattr(fusionart_model.modules[0], "predict", _predict_batch)
+    pred = fusionart_model.predict(X_prep, skip_channels=[1])
+    assert pred.shape[0] == X_prep.shape[0]
+    assert calls["n"] == 1
 
 
 def test_normalize_skip_channels_rejects_out_of_range_indices(fusionart_model):

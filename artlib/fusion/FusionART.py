@@ -113,10 +113,12 @@ class FusionART(BaseART):
         self._gamma_values = np.asarray(self.params["gamma_values"], dtype=float)
         self._cpp_fusion_argmax_threshold = 64
         self._channel_centers_cache: dict[int, np.ndarray] = {}
+        self._cluster_centers_cache: Optional[np.ndarray] = None
         self.dim_ = sum(channel_dims)
 
     def _invalidate_channel_centers_cache(self):
         self._channel_centers_cache.clear()
+        self._cluster_centers_cache = None
 
     def get_params(self, deep: bool = True) -> Dict:
         """Get the parameters of the FusionART model.
@@ -332,6 +334,14 @@ class FusionART(BaseART):
                 )
             normalized.add(idx)
         return normalized
+
+    def _single_active_channel(self, skip: set[int]) -> Optional[int]:
+        if len(skip) != self.n - 1:
+            return None
+        for k in range(self.n):
+            if k not in skip:
+                return k
+        return None
 
     def check_dimensions(self, X: np.ndarray):
         """Ensure that the input data has the correct dimensions.
@@ -830,8 +840,18 @@ class FusionART(BaseART):
         self.validate_data(X)
         self.check_dimensions(X)
 
-        y = np.empty((X.shape[0],), dtype=int)
         skip = self._normalize_skip_channels(skip_channels)
+        active_channel = self._single_active_channel(skip)
+        if active_channel is not None:
+            start_idx, end_idx = self._channel_indices[active_channel]
+            try:
+                return self.modules[active_channel].predict(
+                    X[:, start_idx:end_idx], clip=False
+                )
+            except Exception:
+                pass
+
+        y = np.empty((X.shape[0],), dtype=int)
         step_pred = self._step_pred_with_skip_set
         for i, x in enumerate(X):
             y[i] = step_pred(x, skip)
@@ -932,11 +952,18 @@ class FusionART(BaseART):
             Center points of the clusters.
 
         """
+        centers_arr = self._cluster_centers_cache
+        if centers_arr is not None:
+            return [centers_arr[i] for i in range(centers_arr.shape[0])]
+
         centers_ = [module.get_cluster_centers() for module in self.modules]
         centers = [
             np.concatenate([centers_[k][i] for k in range(self.n)])
             for i in range(self.n_clusters)
         ]
+        centers_arr = np.asarray(centers)
+        if centers_arr.dtype != object and centers_arr.ndim >= 2:
+            self._cluster_centers_cache = np.ascontiguousarray(centers_arr, dtype=np.float64)
         return centers
 
     def get_channel_centers(self, channel: int) -> List[np.ndarray]:
