@@ -69,3 +69,61 @@ def test_build_state_action_reward_query_rejects_invalid_shape():
     actions = np.ones((2, 4), dtype=np.float64)
     with pytest.raises(Exception):
         cpp_fusion_utils.BuildStateActionRewardQuery(state, actions, reward_dim=2)
+
+
+def test_join_channels_with_fill_matches_numpy():
+    channel_a = np.array([[0.1, 0.2], [0.3, 0.4]], dtype=np.float64)
+    channel_c = np.array([[0.9], [0.8]], dtype=np.float64)
+    out = cpp_fusion_utils.JoinChannelsWithFill(
+        [channel_a, channel_c],
+        np.array([2, 3, 1], dtype=np.int64),
+        np.array([1, 0, 1], dtype=np.uint8),
+        fill_value=0.5,
+    )
+    expected = np.array(
+        [
+            [0.1, 0.2, 0.5, 0.5, 0.5, 0.9],
+            [0.3, 0.4, 0.5, 0.5, 0.5, 0.8],
+        ],
+        dtype=np.float64,
+    )
+    np.testing.assert_allclose(out, expected)
+
+
+def test_join_channels_with_fill_rejects_row_mismatch():
+    channel_a = np.ones((2, 2), dtype=np.float64)
+    channel_b = np.ones((3, 1), dtype=np.float64)
+    with pytest.raises(Exception):
+        cpp_fusion_utils.JoinChannelsWithFill(
+            [channel_a, channel_b],
+            np.array([2, 1], dtype=np.int64),
+            np.array([1, 1], dtype=np.uint8),
+        )
+
+
+def test_extract_present_channels_matches_expected_slices():
+    joined = np.array(
+        [
+            [0.1, 0.2, 0.5, 0.5, 0.5, 0.9],
+            [0.3, 0.4, 0.5, 0.5, 0.5, 0.8],
+        ],
+        dtype=np.float64,
+    )
+    out = cpp_fusion_utils.ExtractPresentChannels(
+        joined,
+        np.array([2, 3, 1], dtype=np.int64),
+        np.array([1, 0, 1], dtype=np.uint8),
+    )
+    assert len(out) == 2
+    np.testing.assert_allclose(out[0], joined[:, :2])
+    np.testing.assert_allclose(out[1], joined[:, 5:6])
+
+
+def test_extract_present_channels_rejects_bad_total_width():
+    joined = np.ones((2, 5), dtype=np.float64)
+    with pytest.raises(Exception):
+        cpp_fusion_utils.ExtractPresentChannels(
+            joined,
+            np.array([2, 2], dtype=np.int64),
+            np.array([1, 1], dtype=np.uint8),
+        )

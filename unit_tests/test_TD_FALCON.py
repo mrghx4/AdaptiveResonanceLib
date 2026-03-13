@@ -188,3 +188,41 @@ def test_td_falcon_default_action_queries_do_not_use_join_channel_data(
         states_prep[0, :], action_space=None
     )
     assert action_space.shape[0] == reward_values.shape[0]
+
+
+def test_td_falcon_get_rewards_does_not_use_join_channel_data(
+    monkeypatch, td_falcon_model
+):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+
+    states_prep, actions_prep, rewards_prep = td_falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    td_falcon_model.partial_fit(states_prep, actions_prep, rewards_prep)
+
+    def _fail_join(*args, **kwargs):
+        raise AssertionError("join_channel_data should not be used for get_rewards")
+
+    monkeypatch.setattr(td_falcon_model.fusion_art, "join_channel_data", _fail_join)
+    predicted_rewards = td_falcon_model.get_rewards(states_prep, actions_prep)
+    assert predicted_rewards.shape == rewards.shape
+
+
+def test_td_falcon_calculate_sarsa_untrained_does_not_query_rewards(monkeypatch, td_falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = td_falcon_model.prepare_data(
+        states, actions, rewards
+    )
+
+    def _fail_get_rewards(*args, **kwargs):
+        raise AssertionError("get_rewards should not be used before training")
+
+    monkeypatch.setattr(td_falcon_model, "get_rewards", _fail_get_rewards)
+    _, _, sarsa_rewards_fit = td_falcon_model.calculate_SARSA(
+        states_prep, actions_prep, rewards_prep
+    )
+    assert sarsa_rewards_fit.shape == (9, 2)

@@ -31,4 +31,23 @@ void BuildStateActionRewardQuery(
     double* out
 );
 
+void JoinChannelsWithFill(
+    const double* const* channels,
+    const std::size_t* widths,
+    const unsigned char* present_mask,
+    std::size_t n_total_channels,
+    std::size_t n_samples,
+    double fill_value,
+    double* out
+);
+
+void ExtractPresentChannels(
+    const double* joined_data,
+    std::size_t n_samples,
+    const std::size_t* widths,
+    const unsigned char* present_mask,
+    std::size_t n_total_channels,
+    double** outputs
+);
+
 }  // namespace artlib_cpp

@@ -191,11 +191,46 @@ def test_predict_regression_channel_centers_cache_reuse_and_invalidate(fusionart
 
 def test_join_channel_data(fusionart_model):
     # Test the join_channel_data method
-    channel_1 = np.random.rand(10, 2)
-    channel_2 = np.random.rand(10, 2)
+    channel_1 = np.random.rand(10, 4)
+    channel_2 = np.random.rand(10, 4)
 
     X = fusionart_model.join_channel_data([channel_1, channel_2])
-    assert X.shape == (10, 4)
+    assert X.shape == (10, 8)
+
+
+def test_join_channel_data_with_skip_fills_skipped_channel(fusionart_model):
+    channel_1 = np.random.rand(8, 4)
+    X = fusionart_model.join_channel_data([channel_1], skip_channels=[1])
+    assert X.shape == (8, 8)
+    np.testing.assert_allclose(X[:, :4], channel_1)
+    np.testing.assert_allclose(X[:, 4:], 0.5)
+
+
+def test_join_channel_data_rejects_wrong_number_of_present_channels(fusionart_model):
+    channel_1 = np.random.rand(8, 4)
+    with pytest.raises(ValueError, match="expected 1 present channels"):
+        fusionart_model.join_channel_data([channel_1, channel_1], skip_channels=[1])
+
+
+def test_join_channel_data_rejects_mismatched_channel_rows(fusionart_model):
+    channel_1 = np.random.rand(8, 4)
+    channel_2 = np.random.rand(7, 4)
+    with pytest.raises(ValueError, match="same number of rows"):
+        fusionart_model.join_channel_data([channel_1, channel_2])
+
+
+def test_split_channel_data_rejects_wrong_joined_width(fusionart_model):
+    bad_joined = np.random.rand(4, 7)
+    with pytest.raises(ValueError, match="does not match expected"):
+        fusionart_model.split_channel_data(bad_joined)
+
+
+def test_split_channel_data_with_skip_returns_only_present_channels(fusionart_model):
+    channel_1 = np.random.rand(6, 4)
+    joined = fusionart_model.join_channel_data([channel_1], skip_channels=[1])
+    split = fusionart_model.split_channel_data(joined, skip_channels=[1])
+    assert len(split) == 1
+    np.testing.assert_allclose(split[0], channel_1)
 
 
 def test_category_choice_value_idx_matches_cached_activation(fusionart_model):

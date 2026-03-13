@@ -17,10 +17,14 @@ try:
     from artlib.optimized.backends.cpp.cppFusionUtils import (
         ArgmaxWeightedActivations,
         ArgmaxWeightedChannelActivations,
+        ExtractPresentChannels,
+        JoinChannelsWithFill,
     )
 except ImportError:  # pragma: no cover - optional acceleration module
     ArgmaxWeightedActivations = None
     ArgmaxWeightedChannelActivations = None
+    ExtractPresentChannels = None
+    JoinChannelsWithFill = None
 
 try:
     from artlib.optimized.backends.cpp.cppSimpleARTMAP import GatherClusterCenters
@@ -1021,29 +1025,60 @@ class FusionART(BaseART):
             Concatenated data.
 
         """
-        skip_channels = self._normalize_skip_channels(skip_channels)
-        n_samples = channel_data[0].shape[0]
+        skip = self._normalize_skip_channels(skip_channels)
+        n_present = self.n - len(skip)
+        if len(channel_data) != n_present:
+            raise ValueError(
+                f"expected {n_present} present channels, got {len(channel_data)}"
+            )
+        if n_present == 0:
+            raise ValueError("at least one non-skipped channel is required")
 
         formatted_channel_data = []
-        i = 0
-        for k in range(self.n):
-            if k not in skip_channels:
-                formatted_channel_data.append(channel_data[i])
-                i += 1
-            else:
-                formatted_channel_data.append(
-                    np.full(
-                        (
-                            n_samples,
-                            self._channel_indices[k][1] - self._channel_indices[k][0],
-                        ),
-                        0.5,
-                        dtype=float,
-                    )
-                )
+        n_samples: Optional[int] = None
+        input_idx = 0
+        channel_widths = np.array(self.channel_dims, dtype=np.int64)
+        present_mask = np.array([k not in skip for k in range(self.n)], dtype=np.uint8)
 
-        X = np.hstack(formatted_channel_data)
-        return X
+        for k in range(self.n):
+            width = self._channel_indices[k][1] - self._channel_indices[k][0]
+            if k in skip:
+                continue
+            channel = np.asarray(channel_data[input_idx], dtype=np.float64)
+            if channel.ndim != 2:
+                raise ValueError(f"channel {k} must be 2-D")
+            if channel.shape[1] != width:
+                raise ValueError(
+                    f"channel {k} width {channel.shape[1]} does not match expected {width}"
+                )
+            if n_samples is None:
+                n_samples = channel.shape[0]
+                if n_samples == 0:
+                    raise ValueError("channels must have at least one row")
+            elif channel.shape[0] != n_samples:
+                raise ValueError("all channels must have the same number of rows")
+            formatted_channel_data.append(channel)
+            input_idx += 1
+
+        if JoinChannelsWithFill is not None:
+            return JoinChannelsWithFill(
+                formatted_channel_data,
+                channel_widths,
+                present_mask,
+                0.5,
+            )
+
+        filled_channel_data = []
+        input_idx = 0
+        for k in range(self.n):
+            if k not in skip:
+                filled_channel_data.append(formatted_channel_data[input_idx])
+                input_idx += 1
+            else:
+                filled_channel_data.append(
+                    np.full((n_samples, self.channel_dims[k]), 0.5, dtype=np.float64)
+                )
+        return np.hstack(filled_channel_data)
 
     def split_channel_data(
         self, joined_data: np.ndarray, skip_channels: Optional[List[int]] = None
@@ -1064,6 +1099,22 @@ class FusionART(BaseART):
 
         """
         skip_channels = self._normalize_skip_channels(skip_channels)
+        expected_dim = sum(self.channel_dims)
+        if joined_data.ndim != 2:
+            raise ValueError("joined_data must be 2-D")
+        if joined_data.shape[1] != expected_dim:
+            raise ValueError(
+                f"joined_data width {joined_data.shape[1]} does not match expected {expected_dim}"
+            )
+
+        if ExtractPresentChannels is not None:
+            present_mask = np.array(
+                [k not in skip_channels for k in range(self.n)], dtype=np.uint8
+            )
+            channel_widths = np.array(self.channel_dims, dtype=np.int64)
+            return list(
+                ExtractPresentChannels(joined_data, channel_widths, present_mask)
+            )
 
         channel_data = []
         current_col = 0

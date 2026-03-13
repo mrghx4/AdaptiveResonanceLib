@@ -16,9 +16,13 @@ from artlib.common.utils import complement_code, de_complement_code
 from artlib.fusion.FusionART import FusionART
 
 try:
-    from artlib.optimized.backends.cpp.cppFusionUtils import BuildStateActionRewardQuery
+    from artlib.optimized.backends.cpp.cppFusionUtils import (
+        BuildStateActionRewardQuery,
+        JoinChannelsWithFill,
+    )
 except ImportError:
     BuildStateActionRewardQuery = None
+    JoinChannelsWithFill = None
 
 
 class FALCON:
@@ -74,6 +78,8 @@ class FALCON:
         self._action_space_prepared_cache: Optional[np.ndarray] = None
         self._action_query_template_cache: Optional[np.ndarray] = None
         self._action_space_sig: Optional[int] = None
+        self._channel_dims_i64 = np.asarray(self.fusion_art.channel_dims, dtype=np.int64)
+        self._state_action_present_mask = np.array([1, 1, 0], dtype=np.uint8)
 
     def _reward_centers_array(self) -> np.ndarray:
         sig = len(self.fusion_art.modules[2].W)
@@ -143,6 +149,38 @@ class FALCON:
         state_dim = self.fusion_art.channel_dims[0]
         data[:, :state_dim] = state
         return action_space, data
+
+    def _build_state_action_batch_query(
+        self, states: np.ndarray, actions: np.ndarray
+    ) -> np.ndarray:
+        states_arr = np.asarray(states, dtype=np.float64)
+        actions_arr = np.asarray(actions, dtype=np.float64)
+        if states_arr.ndim != 2:
+            raise ValueError("states must be 2-D")
+        if actions_arr.ndim != 2:
+            raise ValueError("actions must be 2-D")
+        if states_arr.shape[0] != actions_arr.shape[0]:
+            raise ValueError("states and actions must have the same number of rows")
+        if states_arr.shape[1] != self.fusion_art.channel_dims[0]:
+            raise ValueError(
+                f"states width {states_arr.shape[1]} does not match expected "
+                f"{self.fusion_art.channel_dims[0]}"
+            )
+        if actions_arr.shape[1] != self.fusion_art.channel_dims[1]:
+            raise ValueError(
+                f"actions width {actions_arr.shape[1]} does not match expected "
+                f"{self.fusion_art.channel_dims[1]}"
+            )
+        if JoinChannelsWithFill is not None:
+            return JoinChannelsWithFill(
+                [states_arr, actions_arr],
+                self._channel_dims_i64,
+                self._state_action_present_mask,
+                0.5,
+            )
+        return self.fusion_art.join_channel_data(
+            [states_arr, actions_arr], skip_channels=self._reward_skip_channel
+        )
 
     def _invalidate_center_caches(self):
         self._reward_centers_cache = None
@@ -375,10 +413,8 @@ class FALCON:
             The rewards corresponding to the given state-action pairs.
 
         """
+        data = self._build_state_action_batch_query(states, actions)
         reward_centers = self._reward_centers_array()
-        data = self.fusion_art.join_channel_data(
-            [states, actions], skip_channels=self._reward_skip_channel
-        )
         C = self.fusion_art.predict(data, skip_channels=self._reward_skip_channel)
         return reward_centers[C]
 

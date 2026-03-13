@@ -282,3 +282,34 @@ def test_external_action_queries_build_full_width_data(monkeypatch, falcon_model
         captured["data"][:, state_dim : state_dim + action_dim], prepared_actions
     )
     np.testing.assert_allclose(captured["data"][:, state_dim + action_dim :], 0.5)
+
+
+def test_get_rewards_does_not_use_join_channel_data(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    def _fail_join(*args, **kwargs):
+        raise AssertionError("join_channel_data should not be used for get_rewards")
+
+    monkeypatch.setattr(falcon_model.fusion_art, "join_channel_data", _fail_join)
+    predicted_rewards = falcon_model.get_rewards(states_prep, actions_prep)
+    assert predicted_rewards.shape == rewards.shape
+
+
+def test_get_rewards_rejects_mismatched_state_action_rows(falcon_model):
+    states = np.random.rand(5, 4)
+    actions = np.random.rand(4, 4)
+    with pytest.raises(ValueError, match="same number of rows"):
+        falcon_model.get_rewards(states, actions)
+
+
+def test_get_rewards_rejects_invalid_action_width(falcon_model):
+    states = np.random.rand(5, 4)
+    actions = np.random.rand(5, 3)
+    with pytest.raises(ValueError, match="actions width"):
+        falcon_model.get_rewards(states, actions)

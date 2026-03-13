@@ -133,4 +133,114 @@ void BuildStateActionRewardQuery(
     }
 }
 
+void JoinChannelsWithFill(
+    const double* const* channels,
+    const std::size_t* widths,
+    const unsigned char* present_mask,
+    std::size_t n_total_channels,
+    std::size_t n_samples,
+    double fill_value,
+    double* out
+) {
+    if (channels == nullptr) {
+        throw std::invalid_argument("channels cannot be null");
+    }
+    if (widths == nullptr) {
+        throw std::invalid_argument("widths cannot be null");
+    }
+    if (present_mask == nullptr) {
+        throw std::invalid_argument("present_mask cannot be null");
+    }
+    if (out == nullptr) {
+        throw std::invalid_argument("out cannot be null");
+    }
+    if (n_total_channels == 0) {
+        throw std::invalid_argument("n_total_channels must be > 0");
+    }
+    if (n_samples == 0) {
+        throw std::invalid_argument("n_samples must be > 0");
+    }
+
+    std::size_t total_width = 0;
+    for (std::size_t k = 0; k < n_total_channels; ++k) {
+        total_width += widths[k];
+    }
+
+    std::size_t out_offset = 0;
+    std::size_t input_idx = 0;
+    for (std::size_t k = 0; k < n_total_channels; ++k) {
+        const std::size_t width = widths[k];
+        if (present_mask[k]) {
+            const double* channel = channels[input_idx];
+            if (channel == nullptr) {
+                throw std::invalid_argument("present channel pointer cannot be null");
+            }
+            for (std::size_t row = 0; row < n_samples; ++row) {
+                const double* src = channel + (row * width);
+                double* dst = out + (row * total_width) + out_offset;
+                std::copy(src, src + width, dst);
+            }
+            ++input_idx;
+        } else {
+            for (std::size_t row = 0; row < n_samples; ++row) {
+                double* dst = out + (row * total_width) + out_offset;
+                std::fill(dst, dst + width, fill_value);
+            }
+        }
+        out_offset += width;
+    }
+}
+
+void ExtractPresentChannels(
+    const double* joined_data,
+    std::size_t n_samples,
+    const std::size_t* widths,
+    const unsigned char* present_mask,
+    std::size_t n_total_channels,
+    double** outputs
+) {
+    if (joined_data == nullptr) {
+        throw std::invalid_argument("joined_data cannot be null");
+    }
+    if (widths == nullptr) {
+        throw std::invalid_argument("widths cannot be null");
+    }
+    if (present_mask == nullptr) {
+        throw std::invalid_argument("present_mask cannot be null");
+    }
+    if (outputs == nullptr) {
+        throw std::invalid_argument("outputs cannot be null");
+    }
+    if (n_total_channels == 0) {
+        throw std::invalid_argument("n_total_channels must be > 0");
+    }
+    if (n_samples == 0) {
+        throw std::invalid_argument("n_samples must be > 0");
+    }
+
+    std::size_t total_width = 0;
+    for (std::size_t k = 0; k < n_total_channels; ++k) {
+        total_width += widths[k];
+    }
+
+    std::size_t input_idx = 0;
+    std::size_t joined_offset = 0;
+    for (std::size_t k = 0; k < n_total_channels; ++k) {
+        const std::size_t width = widths[k];
+        if (present_mask[k]) {
+            double* out = outputs[input_idx];
+            if (out == nullptr) {
+                throw std::invalid_argument("output channel pointer cannot be null");
+            }
+            for (std::size_t row = 0; row < n_samples; ++row) {
+                const double* src = joined_data + (row * total_width) + joined_offset;
+                double* dst = out + (row * width);
+                std::copy(src, src + width, dst);
+            }
+            ++input_idx;
+        }
+        joined_offset += width;
+    }
+}
+
 }  // namespace artlib_cpp
