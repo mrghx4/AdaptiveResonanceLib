@@ -291,24 +291,28 @@ class CVIART(BaseART):
         self.W: list[np.ndarray] = []
         self.labels_ = np.zeros((X.shape[0],), dtype=int)
         self._fit_match_reset_user = match_reset_func
+        labels = self.labels_
+        pre_step_fit = self.pre_step_fit
+        post_step_fit = self.post_step_fit
+        step_fit = self.base_module.step_fit
+        validity = self.params["validity"]
+        evaluate_validity = self._evaluate_validity
         for _ in range(max_iter):
             for index, x in enumerate(X):
-                self.pre_step_fit(X)
+                pre_step_fit(X)
                 baseline_validity = None
                 if len(self.W) >= 2:
-                    baseline_validity = self._evaluate_validity(
-                        self.data, self.labels_, self.params["validity"]
-                    )
+                    baseline_validity = evaluate_validity(self.data, labels, validity)
                 self._fit_match_reset_index = index
                 self._fit_match_reset_baseline = baseline_validity
-                c = self.base_module.step_fit(
+                c = step_fit(
                     x,
                     match_reset_func=self._fit_match_reset_func,
                     match_tracking=match_tracking,
                     epsilon=epsilon,
                 )
-                self.labels_[index] = c
-                self.post_step_fit(X)
+                labels[index] = c
+                post_step_fit(X)
         self._fit_match_reset_user = None
         self._fit_match_reset_index = None
         self._fit_match_reset_baseline = None

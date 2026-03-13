@@ -153,18 +153,28 @@ class iCVIFuzzyART(FuzzyART):
         self.labels_ = np.zeros((X.shape[0],), dtype=int)
 
         self.iCVI = iCVI_CH(X[0])
+        icvi = self.iCVI
 
         if self.offline:
+            add_sample = icvi.add_sample
+            update_icvi = icvi.update
             for x in X:
-                params = self.iCVI.add_sample(x, 0)
-                self.iCVI.update(params)
+                params = add_sample(x, 0)
+                update_icvi(params)
 
         self._fit_match_reset_user = match_reset_func
+        labels = self.labels_
+        pre_step_fit = self.pre_step_fit
+        post_step_fit = self.post_step_fit
+        step_fit = self.step_fit
+        add_sample = icvi.add_sample
+        switch_label = icvi.switch_label
+        update_icvi = icvi.update
 
         for i, x in enumerate(X):
-            self.pre_step_fit(X)
+            pre_step_fit(X)
             self.index = i
-            c = self.step_fit(
+            c = step_fit(
                 x,
                 match_reset_func=self._fit_match_reset_func,
                 match_tracking=match_tracking,
@@ -172,11 +182,11 @@ class iCVIFuzzyART(FuzzyART):
             )
 
             if self.offline:
-                params = self.iCVI.switch_label(x, self.labels_[i], c)
+                params = switch_label(x, labels[i], c)
             else:
-                params = self.iCVI.add_sample(x, c)
-            self.iCVI.update(params)
+                params = add_sample(x, c)
+            update_icvi(params)
 
-            self.labels_[i] = c
-            self.post_step_fit(X)
+            labels[i] = c
+            post_step_fit(X)
         self._fit_match_reset_user = None
