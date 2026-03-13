@@ -124,10 +124,28 @@ class FALCON:
     def _build_state_action_query(
         self, state: np.ndarray, action_space_prepared: np.ndarray
     ) -> np.ndarray:
+        state_arr = np.asarray(state, dtype=np.float64)
+        action_space_arr = np.asarray(action_space_prepared, dtype=np.float64)
+        if state_arr.ndim != 1:
+            raise ValueError("state must be 1-D")
+        if state_arr.shape[0] != self.fusion_art.channel_dims[0]:
+            raise ValueError(
+                f"state width {state_arr.shape[0]} does not match expected "
+                f"{self.fusion_art.channel_dims[0]}"
+            )
+        if action_space_arr.ndim != 2:
+            raise ValueError("action_space_prepared must be 2-D")
+        if action_space_arr.shape[0] == 0:
+            raise ValueError("action_space_prepared must have at least one row")
+        if action_space_arr.shape[1] != self.fusion_art.channel_dims[1]:
+            raise ValueError(
+                f"action_space_prepared width {action_space_arr.shape[1]} does not "
+                f"match expected {self.fusion_art.channel_dims[1]}"
+            )
         if BuildStateActionRewardQuery is not None:
             return BuildStateActionRewardQuery(
-                np.asarray(state, dtype=np.float64),
-                np.asarray(action_space_prepared, dtype=np.float64),
+                state_arr,
+                action_space_arr,
                 self.fusion_art.channel_dims[2],
                 0.5,
             )
@@ -135,19 +153,27 @@ class FALCON:
         action_dim = self.fusion_art.channel_dims[1]
         reward_dim = self.fusion_art.channel_dims[2]
         data = np.empty(
-            (action_space_prepared.shape[0], state_dim + action_dim + reward_dim),
-            dtype=action_space_prepared.dtype,
+            (action_space_arr.shape[0], state_dim + action_dim + reward_dim),
+            dtype=action_space_arr.dtype,
         )
-        data[:, :state_dim] = state
-        data[:, state_dim : state_dim + action_dim] = action_space_prepared
+        data[:, :state_dim] = state_arr
+        data[:, state_dim : state_dim + action_dim] = action_space_arr
         data[:, state_dim + action_dim :] = 0.5
         return data
 
     def _build_default_state_action_query(self, state: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        state_arr = np.asarray(state, dtype=np.float64)
+        if state_arr.ndim != 1:
+            raise ValueError("state must be 1-D")
+        if state_arr.shape[0] != self.fusion_art.channel_dims[0]:
+            raise ValueError(
+                f"state width {state_arr.shape[0]} does not match expected "
+                f"{self.fusion_art.channel_dims[0]}"
+            )
         action_space, _, template = self._default_action_space()
         data = np.array(template, copy=True)
         state_dim = self.fusion_art.channel_dims[0]
-        data[:, :state_dim] = state
+        data[:, :state_dim] = state_arr
         return action_space, data
 
     def _build_state_action_batch_query(
@@ -306,13 +332,17 @@ class FALCON:
             The possible actions and their corresponding rewards.
 
         """
-        reward_centers_arr = self._reward_centers_array()
         if action_space is None:
             action_space, data = self._build_default_state_action_query(state)
         else:
-            action_space = np.asarray(action_space)
+            action_space = np.asarray(action_space, dtype=np.float64)
+            if action_space.ndim != 2:
+                raise ValueError("action_space must be 2-D")
+            if action_space.shape[0] == 0:
+                raise ValueError("action_space must have at least one row")
             action_space_prepared = self.fusion_art.modules[1].prepare_data(action_space)
             data = self._build_state_action_query(state, action_space_prepared)
+        reward_centers_arr = self._reward_centers_array()
         viable_clusters = self.fusion_art.predict(
             data, skip_channels=self._reward_skip_channel
         )
@@ -472,6 +502,32 @@ class TD_FALCON(FALCON):
             state_art, action_art, reward_art, gamma_values, channel_dims
         )
 
+    def _decode_reward_values(self, rewards: np.ndarray) -> np.ndarray:
+        rewards_arr = np.asarray(rewards, dtype=np.float64)
+        if rewards_arr.ndim != 2:
+            raise ValueError("rewards must be 2-D")
+        if rewards_arr.shape[1] != self.fusion_art.channel_dims[2]:
+            raise ValueError(
+                f"rewards width {rewards_arr.shape[1]} does not match expected "
+                f"{self.fusion_art.channel_dims[2]}"
+            )
+        if rewards_arr.shape[1] == 2:
+            decoded = np.empty((rewards_arr.shape[0], 1), dtype=np.float64)
+            decoded[:, 0] = (rewards_arr[:, 0] + (1.0 - rewards_arr[:, 1])) * 0.5
+            return decoded
+        return de_complement_code(rewards_arr)
+
+    def _encode_reward_values(self, rewards: np.ndarray) -> np.ndarray:
+        rewards_arr = np.asarray(rewards, dtype=np.float64)
+        if rewards_arr.ndim != 2:
+            raise ValueError("reward values must be 2-D")
+        if rewards_arr.shape[1] == 1 and self.fusion_art.channel_dims[2] == 2:
+            encoded = np.empty((rewards_arr.shape[0], 2), dtype=np.float64)
+            encoded[:, 0] = rewards_arr[:, 0]
+            encoded[:, 1] = 1.0 - rewards_arr[:, 0]
+            return encoded
+        return complement_code(rewards_arr)
+
     def fit(self, states: np.ndarray, actions: np.ndarray, rewards: np.ndarray):
         """Fit the TD-FALCON model to the data.
 
@@ -510,7 +566,7 @@ class TD_FALCON(FALCON):
 
         """
         # calculate SARSA values
-        rewards_dcc = de_complement_code(rewards)
+        rewards_dcc = self._decode_reward_values(rewards)
         if len(states) > 1:
             if hasattr(self.fusion_art.modules[0], "W"):
                 # if FALCON has been trained get predicted rewards
@@ -525,7 +581,7 @@ class TD_FALCON(FALCON):
             # ensure SARSA values are between 0 and 1
             sarsa_rewards = np.clip(sarsa_rewards, 0.0, 1.0)
             # complement code rewards
-            sarsa_rewards_fit = complement_code(sarsa_rewards)
+            sarsa_rewards_fit = self._encode_reward_values(sarsa_rewards)
             # we cant train on the final state because no rewards are generated after it
             states_fit = states[:-1, :]
             actions_fit = actions[:-1, :]
@@ -534,7 +590,11 @@ class TD_FALCON(FALCON):
             if single_sample_reward is None:
                 sarsa_rewards_fit = rewards
             else:
-                sarsa_rewards_fit = complement_code(np.array([[single_sample_reward]]))
+                if not 0.0 <= float(single_sample_reward) <= 1.0:
+                    raise ValueError("single_sample_reward must be between 0.0 and 1.0")
+                sarsa_rewards_fit = self._encode_reward_values(
+                    np.array([[single_sample_reward]], dtype=np.float64)
+                )
             states_fit = states
             actions_fit = actions
 

@@ -170,6 +170,24 @@ def test_predict_regression_multiple_target_channels(fusionart_model):
     assert pred[1].shape[0] == X_prep.shape[0]
 
 
+def test_predict_regression_rejects_duplicate_target_channels(fusionart_model):
+    X = [np.random.rand(8, 2), np.random.rand(8, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    with pytest.raises(ValueError, match="duplicate target channel"):
+        fusionart_model.predict_regression(X_prep, target_channels=[1, -1])
+
+
+def test_predict_regression_rejects_out_of_range_target_channel(fusionart_model):
+    X = [np.random.rand(8, 2), np.random.rand(8, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    with pytest.raises(ValueError, match="out of range"):
+        fusionart_model.predict_regression(X_prep, target_channels=[2])
+
+
 def test_predict_regression_channel_centers_cache_reuse_and_invalidate(fusionart_model):
     X = [np.random.rand(18, 2), np.random.rand(18, 2)]
     X_prep = fusionart_model.prepare_data(X)

@@ -962,6 +962,29 @@ class FusionART(BaseART):
             return cached
         return None
 
+    def _normalize_target_channels(
+        self, target_channels: Optional[List[int]]
+    ) -> list[int]:
+        if target_channels is None:
+            target_channels = [-1]
+        if len(target_channels) == 0:
+            raise ValueError("at least one target channel is required")
+
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for channel in target_channels:
+            idx = self.n + channel if channel < 0 else channel
+            if idx < 0 or idx >= self.n:
+                raise ValueError(
+                    f"target channel index {channel} (normalized to {idx}) is out of range "
+                    f"for {self.n} channels"
+                )
+            if idx in seen:
+                raise ValueError(f"duplicate target channel {channel} is not allowed")
+            normalized.append(idx)
+            seen.add(idx)
+        return normalized
+
     def predict_regression(
         self, X: np.ndarray, clip: bool = False, target_channels: Optional[List[int]] = None
     ) -> Union[np.ndarray, List[np.ndarray]]:
@@ -986,9 +1009,7 @@ class FusionART(BaseART):
             np.ndarray, one for each channel.
 
         """
-        if target_channels is None:
-            target_channels = [-1]
-        target_channels = [self.n + k if k < 0 else k for k in target_channels]
+        target_channels = self._normalize_target_channels(target_channels)
         C = self.predict(X, clip=clip, skip_channels=target_channels)
         c_i32 = np.ascontiguousarray(C, dtype=np.int32)
         predictions = []

@@ -93,6 +93,36 @@ def test_td_falcon_calculate_SARSA(td_falcon_model):
     assert sarsa_rewards_fit.shape == (1, 2)
 
 
+def test_td_falcon_calculate_sarsa_single_sample_reward_encoding(td_falcon_model):
+    states = np.random.rand(1, 2)
+    actions = np.random.rand(1, 2)
+    rewards = np.random.rand(1, 1)
+
+    states_prep, actions_prep, rewards_prep = td_falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    _, _, sarsa_rewards_fit = td_falcon_model.calculate_SARSA(
+        states_prep, actions_prep, rewards_prep, single_sample_reward=0.25
+    )
+    np.testing.assert_allclose(sarsa_rewards_fit, np.array([[0.25, 0.75]]))
+
+
+def test_td_falcon_calculate_sarsa_single_sample_reward_rejects_out_of_range(
+    td_falcon_model,
+):
+    states = np.random.rand(1, 2)
+    actions = np.random.rand(1, 2)
+    rewards = np.random.rand(1, 1)
+
+    states_prep, actions_prep, rewards_prep = td_falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    with pytest.raises(ValueError, match="between 0.0 and 1.0"):
+        td_falcon_model.calculate_SARSA(
+            states_prep, actions_prep, rewards_prep, single_sample_reward=1.5
+        )
+
+
 def test_td_falcon_get_actions_and_rewards(td_falcon_model):
     # Test the get_actions_and_rewards method of TD_FALCON
     states = np.random.rand(10, 2)

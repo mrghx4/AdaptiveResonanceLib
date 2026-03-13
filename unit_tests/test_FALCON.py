@@ -313,3 +313,16 @@ def test_get_rewards_rejects_invalid_action_width(falcon_model):
     actions = np.random.rand(5, 3)
     with pytest.raises(ValueError, match="actions width"):
         falcon_model.get_rewards(states, actions)
+
+
+def test_get_actions_and_rewards_rejects_invalid_state_width(falcon_model):
+    bad_state = np.random.rand(3)
+    with pytest.raises(ValueError, match="state width"):
+        falcon_model.get_actions_and_rewards(bad_state)
+
+
+def test_get_actions_and_rewards_rejects_empty_action_space(falcon_model):
+    state = np.random.rand(4)
+    action_space = np.empty((0, 2))
+    with pytest.raises(ValueError, match="at least one row"):
+        falcon_model.get_actions_and_rewards(state, action_space=action_space)
