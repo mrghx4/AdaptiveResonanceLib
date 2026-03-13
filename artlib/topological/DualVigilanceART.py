@@ -65,6 +65,7 @@ class DualVigilanceART(BaseART):
         self.rho_lower_bound = rho_lower_bound
         self.map: dict[int, int] = dict()
         self._next_abstract_label = 0
+        self._map_lookup_cache: Optional[np.ndarray] = None
 
     def prepare_data(self, X: np.ndarray) -> np.ndarray:
         """Prepare data for clustering.
@@ -268,6 +269,19 @@ class DualVigilanceART(BaseART):
         else:
             raise ValueError(f"Invalid Match Tracking Method: {method}")
 
+    def _invalidate_map_lookup_cache(self):
+        self._map_lookup_cache = None
+
+    def _ensure_map_lookup_cache(self) -> np.ndarray:
+        cache = self._map_lookup_cache
+        if cache is not None and cache.shape[0] == len(self.map):
+            return cache
+        cache = np.empty((len(self.map),), dtype=int)
+        for key, value in self.map.items():
+            cache[int(key)] = int(value)
+        self._map_lookup_cache = cache
+        return cache
+
     def _set_params(self, new_params):
         self.base_module.params = new_params
 
@@ -277,13 +291,22 @@ class DualVigilanceART(BaseART):
     def _activation_order(
         self, x: np.ndarray, params: dict
     ) -> tuple[list[int], list[dict]]:
-        activations: list[tuple[float, int, dict]] = []
+        indices: list[int] = []
+        values: list[float] = []
+        caches: list[dict] = []
         for idx, w in enumerate(self.base_module.W):
             t_val, cache = self.base_module.category_choice(x, w, params=params)
             if not np.isnan(t_val):
-                activations.append((float(t_val), idx, cache))
-        activations.sort(key=lambda item: (-item[0], item[1]))
-        return [idx for _, idx, _ in activations], [cache for _, _, cache in activations]
+                indices.append(idx)
+                values.append(float(t_val))
+                caches.append(cache)
+        if not values:
+            return [], []
+
+        order_pos = np.lexsort((np.asarray(indices, dtype=np.int64), -np.asarray(values)))
+        ordered_indices = [indices[pos] for pos in order_pos]
+        ordered_caches = [caches[pos] for pos in order_pos]
+        return ordered_indices, ordered_caches
 
     def _step_pred_label(self, x: np.ndarray) -> int:
         params = self.base_module.params
@@ -334,6 +357,7 @@ class DualVigilanceART(BaseART):
             base_mod.add_weight(new_w)
             self.map[0] = 0
             self._next_abstract_label = 1
+            self._invalidate_map_lookup_cache()
             return 0
         else:
             lb_params = dict(base_params_ref, **{"rho": self.rho_lower_bound})
@@ -374,6 +398,7 @@ class DualVigilanceART(BaseART):
                             w_new = base_mod.new_weight(x, base_params_ref)
                             base_mod.add_weight(w_new)
                             map_[c_new] = mapped_label
+                            self._invalidate_map_lookup_cache()
                             self._set_params(base_params)
                             return mapped_label
                 else:
@@ -389,6 +414,7 @@ class DualVigilanceART(BaseART):
             new_label = self._next_abstract_label
             self.map[c_new] = new_label
             self._next_abstract_label = new_label + 1
+            self._invalidate_map_lookup_cache()
             self._set_params(base_params)
             return new_label
 
@@ -428,6 +454,7 @@ class DualVigilanceART(BaseART):
         self.labels_ = np.zeros((X.shape[0],), dtype=int)
         self.map = {}
         self._next_abstract_label = 0
+        self._invalidate_map_lookup_cache()
         self.sample_counter_ = 0
         self.weight_sample_counter_ = []
 
@@ -466,7 +493,8 @@ class DualVigilanceART(BaseART):
 
         try:
             base_pred = self.base_module.predict(X, clip=False)
-            return np.array([self.map[int(c)] for c in base_pred], dtype=int)
+            map_lookup = self._ensure_map_lookup_cache()
+            return map_lookup[np.asarray(base_pred, dtype=int)]
         except Exception:
             pass
 
@@ -502,9 +530,8 @@ class DualVigilanceART(BaseART):
             Width of boundary line, by default 1.
 
         """
-        colors_base = []
-        for k_a in range(self.base_module.n_clusters):
-            colors_base.append(colors[self.map[k_a]])
+        map_lookup = self._ensure_map_lookup_cache()
+        colors_base = [colors[int(label)] for label in map_lookup[: self.base_module.n_clusters]]
 
         try:
             self.base_module.plot_cluster_bounds(

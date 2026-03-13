@@ -49,7 +49,6 @@ def test_partial_fit(smart_model):
 
     # Prepare data before partial fitting
     X_prep = smart_model.prepare_data(X)
-    print(smart_model.n_modules)
     smart_model.partial_fit(X_prep)
 
     assert smart_model.modules[0].labels_.shape[0] == X.shape[0]

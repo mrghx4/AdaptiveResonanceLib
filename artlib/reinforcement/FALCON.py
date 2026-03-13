@@ -78,6 +78,10 @@ class FALCON:
         self._action_space_prepared_cache: Optional[np.ndarray] = None
         self._action_query_template_cache: Optional[np.ndarray] = None
         self._action_space_sig: Optional[int] = None
+        self._external_action_space_cache: Optional[np.ndarray] = None
+        self._external_action_space_prepared_cache: Optional[np.ndarray] = None
+        self._external_action_query_template_cache: Optional[np.ndarray] = None
+        self._external_action_space_sig: Optional[tuple[int, tuple[int, ...]]] = None
         self._channel_dims_i64 = np.asarray(self.fusion_art.channel_dims, dtype=np.int64)
         self._state_action_present_mask = np.array([1, 1, 0], dtype=np.uint8)
 
@@ -161,6 +165,42 @@ class FALCON:
         data[:, state_dim + action_dim :] = 0.5
         return data
 
+    def _external_action_space_components(
+        self, action_space: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        action_space_arr = np.asarray(action_space, dtype=np.float64)
+        if action_space_arr.ndim != 2:
+            raise ValueError("action_space must be 2-D")
+        if action_space_arr.shape[0] == 0:
+            raise ValueError("action_space must have at least one row")
+        sig = (id(action_space_arr), action_space_arr.shape)
+        if (
+            self._external_action_space_prepared_cache is not None
+            and self._external_action_query_template_cache is not None
+            and self._external_action_space_cache is action_space_arr
+            and self._external_action_space_sig == sig
+        ):
+            return (
+                self._external_action_space_cache,
+                self._external_action_space_prepared_cache,
+                self._external_action_query_template_cache,
+            )
+        prepared = self.fusion_art.modules[1].prepare_data(action_space_arr)
+        state_dim = self.fusion_art.channel_dims[0]
+        action_dim = self.fusion_art.channel_dims[1]
+        reward_dim = self.fusion_art.channel_dims[2]
+        template = np.empty(
+            (prepared.shape[0], state_dim + action_dim + reward_dim),
+            dtype=prepared.dtype,
+        )
+        template[:, state_dim : state_dim + action_dim] = prepared
+        template[:, state_dim + action_dim :] = 0.5
+        self._external_action_space_cache = action_space_arr
+        self._external_action_space_prepared_cache = prepared
+        self._external_action_query_template_cache = template
+        self._external_action_space_sig = sig
+        return action_space_arr, prepared, template
+
     def _build_default_state_action_query(self, state: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         state_arr = np.asarray(state, dtype=np.float64)
         if state_arr.ndim != 1:
@@ -215,6 +255,10 @@ class FALCON:
         self._action_space_prepared_cache = None
         self._action_query_template_cache = None
         self._action_space_sig = None
+        self._external_action_space_cache = None
+        self._external_action_space_prepared_cache = None
+        self._external_action_query_template_cache = None
+        self._external_action_space_sig = None
 
     def prepare_data(
         self, states: np.ndarray, actions: np.ndarray, rewards: np.ndarray
@@ -335,13 +379,17 @@ class FALCON:
         if action_space is None:
             action_space, data = self._build_default_state_action_query(state)
         else:
-            action_space = np.asarray(action_space, dtype=np.float64)
-            if action_space.ndim != 2:
-                raise ValueError("action_space must be 2-D")
-            if action_space.shape[0] == 0:
-                raise ValueError("action_space must have at least one row")
-            action_space_prepared = self.fusion_art.modules[1].prepare_data(action_space)
-            data = self._build_state_action_query(state, action_space_prepared)
+            state_arr = np.asarray(state, dtype=np.float64)
+            if state_arr.ndim != 1:
+                raise ValueError("state must be 1-D")
+            if state_arr.shape[0] != self.fusion_art.channel_dims[0]:
+                raise ValueError(
+                    f"state width {state_arr.shape[0]} does not match expected "
+                    f"{self.fusion_art.channel_dims[0]}"
+                )
+            action_space, _, template = self._external_action_space_components(action_space)
+            data = np.array(template, copy=True)
+            data[:, : self.fusion_art.channel_dims[0]] = state_arr
         reward_centers_arr = self._reward_centers_array()
         viable_clusters = self.fusion_art.predict(
             data, skip_channels=self._reward_skip_channel

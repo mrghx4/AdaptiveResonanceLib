@@ -73,7 +73,6 @@ def test_falcon_get_actions_and_rewards(falcon_model):
     )
 
     falcon_model.fit(states_prep, actions_prep, rewards_prep)
-    print(states_prep[0, :])
 
     action_space, rewards = falcon_model.get_actions_and_rewards(
         states_prep[0, :]
@@ -167,7 +166,7 @@ def test_get_probabilistic_action_handles_zero_reward_distribution(monkeypatch, 
     )
     falcon_model.fit(states_prep, actions_prep, rewards_prep)
 
-    action_space = np.random.rand(4, 2)
+    action_space = actions[:4]
     zero_rewards = np.zeros((4, 1), dtype=float)
 
     def _zero_rewards(*args, **kwargs):
@@ -282,6 +281,81 @@ def test_external_action_queries_build_full_width_data(monkeypatch, falcon_model
         captured["data"][:, state_dim : state_dim + action_dim], prepared_actions
     )
     np.testing.assert_allclose(captured["data"][:, state_dim + action_dim :], 0.5)
+
+
+def test_external_action_space_cache_reuses_prepared_actions(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    action_space = actions[:4]
+    calls = {"n": 0}
+    orig_prepare = falcon_model.fusion_art.modules[1].prepare_data
+
+    def _count_prepare(*args, **kwargs):
+        calls["n"] += 1
+        return orig_prepare(*args, **kwargs)
+
+    monkeypatch.setattr(
+        falcon_model.fusion_art.modules[1], "prepare_data", _count_prepare
+    )
+    falcon_model.get_actions_and_rewards(states_prep[0, :], action_space=action_space)
+    falcon_model.get_actions_and_rewards(states_prep[1, :], action_space=action_space)
+    assert calls["n"] == 1
+
+
+def test_external_action_queries_reuse_cached_template(monkeypatch, falcon_model):
+    states = np.random.rand(10, 2)
+    actions = np.random.rand(10, 2)
+    rewards = np.random.rand(10, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    action_space = actions[:4]
+    falcon_model.get_actions_and_rewards(states_prep[0, :], action_space=action_space)
+
+    def _fail_build_query(*args, **kwargs):
+        raise AssertionError("_build_state_action_query should not be used once the external template is cached")
+
+    monkeypatch.setattr(falcon_model, "_build_state_action_query", _fail_build_query)
+    action_space_out, rewards_out = falcon_model.get_actions_and_rewards(
+        states_prep[1, :], action_space=action_space
+    )
+    assert action_space_out.shape[0] == rewards_out.shape[0]
+
+
+def test_external_action_space_cache_invalidates_after_partial_fit(monkeypatch, falcon_model):
+    states = np.random.rand(12, 2)
+    actions = np.random.rand(12, 2)
+    rewards = np.random.rand(12, 1)
+    states_prep, actions_prep, rewards_prep = falcon_model.prepare_data(
+        states, actions, rewards
+    )
+    falcon_model.fit(states_prep, actions_prep, rewards_prep)
+
+    action_space = actions[:4]
+    falcon_model.get_actions_and_rewards(states_prep[0, :], action_space=action_space)
+
+    calls = {"n": 0}
+    orig_prepare = falcon_model.fusion_art.modules[1].prepare_data
+
+    def _count_prepare(*args, **kwargs):
+        calls["n"] += 1
+        return orig_prepare(*args, **kwargs)
+
+    monkeypatch.setattr(
+        falcon_model.fusion_art.modules[1], "prepare_data", _count_prepare
+    )
+    falcon_model.partial_fit(states_prep[:4], actions_prep[:4], rewards_prep[:4])
+    falcon_model.get_actions_and_rewards(states_prep[1, :], action_space=action_space)
+    assert calls["n"] >= 1
+    assert falcon_model._external_action_query_template_cache is not None
 
 
 def test_get_rewards_does_not_use_join_channel_data(monkeypatch, falcon_model):

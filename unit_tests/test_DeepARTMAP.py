@@ -222,3 +222,19 @@ def test_layer_map_cache_refreshes_on_manual_map_value_change(deep_artmap_model)
     arr_after = deep_artmap_model._get_layer_map_array(0)
     assert arr_after is not None
     assert int(arr_after[key]) == old_val + 1
+
+
+def test_map_chain_cache_reused_and_invalidated(deep_artmap_model):
+    X = [np.random.rand(12, 5), np.random.rand(12, 5)]
+    X_prep, _ = deep_artmap_model.prepare_data(X)
+    deep_artmap_model.fit(X_prep, max_iter=1)
+
+    chain1 = deep_artmap_model._get_map_chain_arrays(0)
+    chain2 = deep_artmap_model._get_map_chain_arrays(0)
+    assert chain1 is not None
+    assert chain1 is chain2
+
+    deep_artmap_model._invalidate_layer_map_cache()
+    chain3 = deep_artmap_model._get_map_chain_arrays(0)
+    assert chain3 is not None
+    assert chain3 is not chain1

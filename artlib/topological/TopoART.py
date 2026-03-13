@@ -332,16 +332,30 @@ class TopoART(BaseART):
         self.adjacency = self.adjacency[perm_labels][:, perm_labels]
         self._permanent_mask = self._permanent_mask[perm_labels]
 
-        label_map = {old: new for new, old in enumerate(perm_labels)}
+        if len(counts) > 0:
+            label_map = np.full((len(counts),), -1, dtype=int)
+            label_map[perm_labels] = np.arange(len(perm_labels), dtype=int)
+            remapped = np.full_like(self.labels_, -1)
+            valid = (self.labels_ >= 0) & (self.labels_ < len(label_map))
+            remapped[valid] = label_map[self.labels_[valid]]
+        else:
+            remapped = np.full_like(self.labels_, -1)
 
-        for i, x in enumerate(X):
-            if self.labels_[i] in label_map:
-                self.labels_[i] = label_map[self.labels_[i]]
-            elif len(self.W) > 0:
-                # this is a more flexible approach than that described in the paper
-                self.labels_[i] = self.step_pred(x)
-            else:
-                self.labels_[i] = -1
+        if len(self.W) > 0:
+            unresolved = remapped < 0
+            if np.any(unresolved):
+                unresolved_idx = np.flatnonzero(unresolved)
+                try:
+                    remapped[unresolved_idx] = self.base_module.predict(
+                        X[unresolved_idx], clip=False
+                    )
+                except Exception:
+                    step_pred = self.step_pred
+                    for i in unresolved_idx:
+                        # this is a more flexible approach than that described in the paper
+                        remapped[i] = step_pred(X[i])
+
+        self.labels_ = remapped
 
     def post_step_fit(self, X: np.ndarray):
         """Perform post-fit operations, such as cluster pruning, after fitting each
@@ -427,13 +441,22 @@ class TopoART(BaseART):
     def _activation_order(
         self, x: np.ndarray, params: dict
     ) -> tuple[list[int], list[dict]]:
-        activations: list[tuple[float, int, dict]] = []
+        indices: list[int] = []
+        values: list[float] = []
+        caches: list[dict] = []
         for idx, w in enumerate(self.W):
             t_val, cache = self.category_choice(x, w, params=params)
             if not np.isnan(t_val):
-                activations.append((float(t_val), idx, cache))
-        activations.sort(key=lambda item: (-item[0], item[1]))
-        return [idx for _, idx, _ in activations], [cache for _, _, cache in activations]
+                indices.append(idx)
+                values.append(float(t_val))
+                caches.append(cache)
+        if not values:
+            return [], []
+
+        order_pos = np.lexsort((np.asarray(indices, dtype=np.int64), -np.asarray(values)))
+        ordered_indices = [indices[pos] for pos in order_pos]
+        ordered_caches = [caches[pos] for pos in order_pos]
+        return ordered_indices, ordered_caches
 
     def _step_pred_label(self, x: np.ndarray) -> int:
         best_idx = 0
@@ -479,6 +502,8 @@ class TopoART(BaseART):
         base_mod = self.base_module
         base_params_ref = base_mod.params
         user_match_reset = match_reset_func
+        beta_lower = self.params["beta_lower"]
+        params_self = self.params
 
         if len(self.W) == 0:
             new_w = self.new_weight(x, self.params)
@@ -506,7 +531,7 @@ class TopoART(BaseART):
                         params = base_params_ref
                         update_cache = cache
                     else:
-                        params = dict(base_params_ref, **{"beta": self.params["beta_lower"]})
+                        params = dict(base_params_ref, **{"beta": beta_lower})
                         update_cache = dict(
                             (cache if cache else {}),
                             **{"resonant_c": resonant_c, "current_c": c_},
@@ -526,7 +551,7 @@ class TopoART(BaseART):
                         return resonant_c
                 elif not no_match_reset:
                     keep_searching = self._match_tracking(
-                        cache, epsilon, self.params, match_tracking
+                        cache, epsilon, params_self, match_tracking
                     )
                     if not keep_searching:
                         break

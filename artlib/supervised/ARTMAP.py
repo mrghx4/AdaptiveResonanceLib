@@ -49,7 +49,24 @@ class ARTMAP(SimpleARTMAP):
 
         """
         self.module_b = module_b
+        self._module_b_centers_cache: Optional[np.ndarray] = None
         super(ARTMAP, self).__init__(module_a)
+
+    def _invalidate_module_b_centers_cache(self):
+        self._module_b_centers_cache = None
+
+    def _get_numeric_module_b_centers(self) -> Optional[np.ndarray]:
+        centers_arr = self._module_b_centers_cache
+        if centers_arr is not None:
+            return centers_arr
+
+        centers = self.module_b.get_cluster_centers()
+        centers_arr = np.asarray(centers)
+        if centers_arr.dtype == object or centers_arr.ndim < 2:
+            return None
+        centers_arr = np.ascontiguousarray(centers_arr, dtype=np.float64)
+        self._module_b_centers_cache = centers_arr
+        return centers_arr
 
     def get_params(self, deep: bool = True) -> dict:
         """Get the parameters of the ARTMAP model.
@@ -217,6 +234,7 @@ class ARTMAP(SimpleARTMAP):
             epsilon=epsilon,
             verbose=verbose,
         )
+        self._invalidate_module_b_centers_cache()
 
         y_c = self.module_b.labels_
 
@@ -260,9 +278,11 @@ class ARTMAP(SimpleARTMAP):
         """
         self.validate_data(X, y)
         self.module_b.partial_fit(y, match_tracking=match_tracking, epsilon=epsilon)
+        self._invalidate_module_b_centers_cache()
+        n_samples = X.shape[0]
         super(ARTMAP, self).partial_fit(
             X,
-            self.labels_b,
+            self.labels_b[-n_samples:],
             match_tracking=match_tracking,
             epsilon=epsilon,
         )
@@ -328,13 +348,13 @@ class ARTMAP(SimpleARTMAP):
         """
         check_is_fitted(self)
         C = self.predict(X, clip=clip)
-        centers = self.module_b.get_cluster_centers()
-        centers_arr = np.asarray(centers)
-        if centers_arr.dtype != object and centers_arr.ndim >= 2:
+        centers_arr = self._get_numeric_module_b_centers()
+        if centers_arr is not None:
             if GatherClusterCenters is not None:
                 return GatherClusterCenters(
                     np.ascontiguousarray(C, dtype=np.int32),
-                    np.ascontiguousarray(centers_arr, dtype=np.float64),
+                    centers_arr,
                 )
             return centers_arr[C]
+        centers = self.module_b.get_cluster_centers()
         return np.array([centers[c] for c in C])

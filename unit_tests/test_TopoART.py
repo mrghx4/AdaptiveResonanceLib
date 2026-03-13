@@ -144,6 +144,66 @@ def test_prune_is_silent(topoart_model, capsys):
     assert captured.out == ""
 
 
+def test_prune_vectorized_relabel_skips_step_pred_when_all_labels_survive(monkeypatch, topoart_model):
+    X = np.random.rand(6, 2)
+    topoart_model.base_module.W = [np.random.rand(2) for _ in range(3)]
+    topoart_model.weight_sample_counter_ = [6, 7, 8]
+    topoart_model._permanent_mask = np.zeros((3,), dtype=bool)
+    topoart_model.adjacency = np.random.randint(0, 10, (3, 3))
+    topoart_model.labels_ = np.array([0, 1, 2, 1, 0, 2], dtype=int)
+
+    def _fail_step_pred(x):
+        raise AssertionError("step_pred should not be called")
+
+    monkeypatch.setattr(topoart_model, "step_pred", _fail_step_pred)
+    topoart_model.prune(X)
+    np.testing.assert_array_equal(topoart_model.labels_, np.array([0, 1, 2, 1, 0, 2]))
+
+
+def test_prune_negative_labels_stay_unresolved_without_index_wrap(monkeypatch, topoart_model):
+    X = np.random.rand(5, 2)
+    topoart_model.base_module.W = [np.random.rand(2) for _ in range(2)]
+    topoart_model.weight_sample_counter_ = [6, 7]
+    topoart_model._permanent_mask = np.zeros((2,), dtype=bool)
+    topoart_model.adjacency = np.random.randint(0, 10, (2, 2))
+    topoart_model.labels_ = np.array([0, -1, 1, -1, 0], dtype=int)
+
+    calls = {"n": 0}
+
+    def _step_pred(x):
+        calls["n"] += 1
+        return 1
+
+    monkeypatch.setattr(topoart_model, "step_pred", _step_pred)
+    topoart_model.prune(X)
+    np.testing.assert_array_equal(topoart_model.labels_, np.array([0, 1, 1, 1, 0]))
+    assert calls["n"] == 2
+
+
+def test_prune_uses_base_module_batch_predict_for_unresolved(monkeypatch, topoart_model):
+    X = np.random.rand(5, 2)
+    topoart_model.base_module.W = [np.random.rand(2) for _ in range(2)]
+    topoart_model.weight_sample_counter_ = [6, 7]
+    topoart_model._permanent_mask = np.zeros((2,), dtype=bool)
+    topoart_model.adjacency = np.random.randint(0, 10, (2, 2))
+    topoart_model.labels_ = np.array([0, -1, 1, -1, 0], dtype=int)
+
+    calls = {"n": 0}
+
+    def _predict_batch(data, clip=False):
+        calls["n"] += 1
+        return np.ones((data.shape[0],), dtype=int)
+
+    def _fail_step_pred(x):
+        raise AssertionError("step_pred should not be called")
+
+    monkeypatch.setattr(topoart_model.base_module, "predict", _predict_batch)
+    monkeypatch.setattr(topoart_model, "step_pred", _fail_step_pred)
+    topoart_model.prune(X)
+    np.testing.assert_array_equal(topoart_model.labels_, np.array([0, 1, 1, 1, 0]))
+    assert calls["n"] == 1
+
+
 def test_predict_uses_base_module_batch_predict(monkeypatch, topoart_model):
     X = np.random.rand(6, 2)
     X_prep = topoart_model.prepare_data(X)
@@ -170,3 +230,16 @@ def test_fit_resets_topology_state(topoart_model):
     assert topoart_model.labels_.shape[0] == X_prep.shape[0]
     assert topoart_model.adjacency.shape[0] == topoart_model.adjacency.shape[1]
     assert topoart_model._permanent_mask.shape[0] == topoart_model.adjacency.shape[0]
+
+
+def test_activation_order_prefers_higher_activation_then_lower_index(topoart_model, monkeypatch):
+    topoart_model.base_module.W = [np.array([0.1, 0.2, 0.9, 0.8])] * 3
+    values = iter([(0.2, {"id": 0}), (0.8, {"id": 1}), (0.8, {"id": 2})])
+
+    def _category_choice(x, w, params):
+        return next(values)
+
+    monkeypatch.setattr(topoart_model, "category_choice", _category_choice)
+    order, caches = topoart_model._activation_order(np.array([0.1, 0.2, 0.9, 0.8]), topoart_model.base_module.params)
+    assert order == [1, 2, 0]
+    assert [cache["id"] for cache in caches] == [1, 2, 0]

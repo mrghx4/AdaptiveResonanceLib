@@ -155,6 +155,81 @@ def test_cpp_metric_cache_uses_original_when_already_compatible(bartmap_model):
     assert labels_cpp.flags["C_CONTIGUOUS"]
 
 
+def test_column_cluster_mask_cache_reused_for_python_fallback(monkeypatch, bartmap_model):
+    X = np.random.rand(10, 10)
+    bartmap_model.X = X
+
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+    monkeypatch.setattr(bartmap_module, "AveragePearsonCorr", None)
+
+    mask_builds = {"n": 0}
+    orig_ensure_masks = bartmap_model._ensure_column_cluster_masks
+
+    def _capture_masks():
+        before = bartmap_model._column_cluster_masks
+        out = orig_ensure_masks()
+        if before is None:
+            mask_builds["n"] += 1
+        return out
+
+    monkeypatch.setattr(bartmap_model, "_ensure_column_cluster_masks", _capture_masks)
+    r1 = bartmap_model._average_pearson_corr(X, k=0, c_b=0)
+    r2 = bartmap_model._average_pearson_corr(X, k=1, c_b=0)
+
+    assert isinstance(r1, float)
+    assert isinstance(r2, float)
+    assert mask_builds["n"] == 1
+
+
+def test_column_cluster_mask_cache_refreshes_when_label_array_changes(bartmap_model):
+    X = np.random.rand(8, 8)
+    bartmap_model.X = X
+
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+    masks_1 = bartmap_model._ensure_column_cluster_masks()
+    labels_1 = bartmap_model.module_b.labels_.copy()
+
+    bartmap_model.module_b.labels_ = labels_1[::-1].copy()
+    masks_2 = bartmap_model._ensure_column_cluster_masks()
+
+    assert masks_1 is not masks_2
+    assert bartmap_model._column_cluster_labels_ref is bartmap_model.module_b.labels_
+
+
+def test_column_cluster_rows_cache_reused_and_refreshes(bartmap_model):
+    X = np.random.rand(8, 8)
+    bartmap_model.X = X
+
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+    rows_1 = bartmap_model._ensure_column_cluster_rows(X)
+    rows_2 = bartmap_model._ensure_column_cluster_rows(X)
+
+    assert rows_1 is rows_2
+
+    X2 = X.copy()
+    rows_3 = bartmap_model._ensure_column_cluster_rows(X2)
+    assert rows_3 is not rows_1
+
+
+def test_column_cluster_feature_views_cache_reused_and_refreshes(bartmap_model):
+    X = np.random.rand(8, 8)
+    bartmap_model.X = X
+
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+    views_1 = bartmap_model._ensure_column_cluster_feature_views(X)
+    views_2 = bartmap_model._ensure_column_cluster_feature_views(X)
+
+    assert views_1 is views_2
+
+    X2 = X.copy()
+    views_3 = bartmap_model._ensure_column_cluster_feature_views(X2)
+    assert views_3 is not views_1
+
+
 def test_cpp_label_converter_no_copy_for_int32_contiguous():
     labels = np.array([0, 1, 2, 3], dtype=np.int32)
     out = BARTMAP._to_cpp_int32_c(labels)
@@ -195,6 +270,42 @@ def test_match_reset_func_memoizes_any_cluster_match(monkeypatch, bartmap_model)
     assert r1 is True
     assert r2 is True
     assert call_counter["n"] == 1
+
+
+def test_match_reset_func_python_helper_reused(monkeypatch, bartmap_model):
+    X = np.random.rand(10, 10)
+    bartmap_model.X = X
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+
+    calls = {"n": 0}
+
+    def _any_cluster_match_python(k):
+        calls["n"] += 1
+        return True
+
+    monkeypatch.setattr(bartmap_module, "AnyClusterMatch", None)
+    monkeypatch.setattr(bartmap_model, "_any_cluster_match_python", _any_cluster_match_python)
+
+    state = {}
+    r1 = bartmap_model.match_reset_func(
+        i=X[0],
+        w=np.zeros_like(X[0]),
+        cluster_a=0,
+        params={},
+        extra={"k": 0, "match_state": state},
+    )
+    r2 = bartmap_model.match_reset_func(
+        i=X[0],
+        w=np.zeros_like(X[0]),
+        cluster_a=1,
+        params={},
+        extra={"k": 0, "match_state": state},
+    )
+
+    assert r1 is True
+    assert r2 is True
+    assert calls["n"] == 1
 
 
 def test_fit_sets_cached_module_b_cluster_count(bartmap_model):
@@ -246,6 +357,26 @@ def test_fit_rows_columns_layout_matches_reference(bartmap_model):
     assert np.array_equal(bartmap_model.columns_, cols_ref)
 
 
+def test_build_bicluster_masks_matches_reference():
+    row_labels = np.array([1, 0, 1, 2], dtype=int)
+    col_labels = np.array([0, 2, 1], dtype=int)
+    rows, cols = BARTMAP._build_bicluster_masks(
+        row_labels=row_labels,
+        col_labels=col_labels,
+        n_row_clusters=3,
+        n_col_clusters=3,
+    )
+
+    rows_ref = np.vstack(
+        [row_labels == label for label in range(3) for _ in range(3)]
+    )
+    cols_ref = np.vstack(
+        [col_labels == label for _ in range(3) for label in range(3)]
+    )
+    assert np.array_equal(rows, rows_ref)
+    assert np.array_equal(cols, cols_ref)
+
+
 def test_step_fit_reuses_match_reset_state(bartmap_model):
     X = np.random.rand(12, 12)
     bartmap_model.X = X
@@ -277,3 +408,22 @@ def test_step_fit_reuses_match_reset_state(bartmap_model):
     assert len(set(seen_callback_ids)) == 1
     assert id(bartmap_model._match_reset_state) == state_id_1 == state_id_2
     assert id(bartmap_model._step_match_reset_func_cached) == callback_id_1 == callback_id_2
+
+
+def test_fit_uses_sample_fast_path(monkeypatch, bartmap_model):
+    X = np.random.rand(10, 10)
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    calls = {"n": 0}
+
+    orig_fit = bartmap_model.module_b.fit
+    orig_prepare = bartmap_model.module_a.prepare_data
+
+    def _capture_step_fit_sample(x_k, k):
+        calls["n"] += 1
+        return 0
+
+    monkeypatch.setattr(bartmap_model, "_step_fit_sample", _capture_step_fit_sample)
+    monkeypatch.setattr(bartmap_model.module_b, "fit", orig_fit)
+    monkeypatch.setattr(bartmap_model.module_a, "prepare_data", orig_prepare)
+    bartmap_model.fit(X, max_iter=1)
+    assert calls["n"] == X.shape[0]

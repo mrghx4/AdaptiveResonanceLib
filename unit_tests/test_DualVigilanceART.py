@@ -172,6 +172,35 @@ def test_predict_uses_base_module_batch_predict(monkeypatch, art_model):
     assert calls["n"] == 1
 
 
+def test_predict_reuses_cached_map_lookup(monkeypatch, art_model):
+    X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
+    art_model.base_module.W = [np.array([0.1, 0.2]), np.array([0.3, 0.4])]
+    art_model.map = {0: 5, 1: 9}
+    art_model.is_fitted_ = True
+
+    calls = {"n": 0}
+
+    def _predict_batch(data, clip=False):
+        return np.array([0, 1, 0], dtype=int)
+
+    orig_ensure = art_model._ensure_map_lookup_cache
+
+    def _capture_ensure():
+        before = art_model._map_lookup_cache
+        out = orig_ensure()
+        if before is None:
+            calls["n"] += 1
+        return out
+
+    monkeypatch.setattr(art_model.base_module, "predict", _predict_batch)
+    monkeypatch.setattr(art_model, "_ensure_map_lookup_cache", _capture_ensure)
+    pred1 = art_model.predict(X)
+    pred2 = art_model.predict(X)
+    np.testing.assert_array_equal(pred1, np.array([5, 9, 5]))
+    np.testing.assert_array_equal(pred2, np.array([5, 9, 5]))
+    assert calls["n"] == 1
+
+
 def test_fit_resets_map_state(art_model):
     X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
     art_model.map = {99: 7}
@@ -180,3 +209,17 @@ def test_fit_resets_map_state(art_model):
     assert 99 not in art_model.map
     assert art_model.labels_.shape[0] == X.shape[0]
     assert art_model._next_abstract_label >= 1
+    assert art_model._map_lookup_cache is None
+
+
+def test_activation_order_prefers_higher_activation_then_lower_index(art_model, monkeypatch):
+    art_model.base_module.W = [np.array([0.1, 0.2])] * 3
+    values = iter([(0.4, {"id": 0}), (0.7, {"id": 1}), (0.7, {"id": 2})])
+
+    def _category_choice(x, w, params):
+        return next(values)
+
+    monkeypatch.setattr(art_model.base_module, "category_choice", _category_choice)
+    order, caches = art_model._activation_order(np.array([0.1, 0.2]), art_model.base_module.params)
+    assert order == [1, 2, 0]
+    assert [cache["id"] for cache in caches] == [1, 2, 0]

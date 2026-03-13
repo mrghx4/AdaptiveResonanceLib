@@ -69,10 +69,17 @@ Status meanings:
 
 ## Current Validation State
 
-- Full Python suite baseline: `409 passed, 23 warnings`
+- Full Python suite baseline: `457 passed, 1 skipped, 23 warnings`
 - Warning profile remains limited to the known `ART2` warnings
 - Dedicated parity/smoke coverage exists for the current C++ backend families
 - Benchmark scripts are present for backend runtime, fusion, and hierarchical mapping
+- Factory MNIST backend-comparison tests now default to a smaller routine slice.
+  Use `ART_FACTORY_TRAIN_SAMPLES` and `ART_FACTORY_TEST_SAMPLES` to opt into larger
+  benchmark-style runs when you want full-MNIST comparisons explicitly.
+- For a dedicated local factory-backend comparison run, use:
+  `scripts/run_factory_backend_vnv.sh`
+- For the larger MNIST slice used in extended local comparisons, use:
+  `scripts/run_factory_backend_vnv.sh --full-mnist`
 
 ## Remaining Highest-Value Conversion Targets
 

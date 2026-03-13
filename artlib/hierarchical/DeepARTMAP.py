@@ -61,6 +61,9 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         self.layers: list[BaseARTMAP] = []
         self.is_supervised: Optional[bool] = None
         self._layer_map_cache: dict[int, tuple[tuple[int, int, int, int], np.ndarray]] = {}
+        self._map_chain_cache: dict[
+            int, tuple[tuple[tuple[int, int, int, int], ...], list[np.ndarray]]
+        ] = {}
 
     def get_params(self, deep: bool = True) -> dict:
         """Get parameters for this estimator.
@@ -199,13 +202,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         if level < 0:
             level += len(self.layers)
         if isinstance(y_a, np.ndarray) and MapSimpleARTMAPLabelsChain is not None:
-            chain = []
-            for i in range(level, -1, -1):
-                map_arr = self._get_layer_map_array(i)
-                if map_arr is None:
-                    chain = []
-                    break
-                chain.append(map_arr)
+            chain = self._get_map_chain_arrays(level)
             if chain:
                 y_i32 = np.ascontiguousarray(y_a, dtype=np.int32)
                 try:
@@ -222,6 +219,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
 
     def _invalidate_layer_map_cache(self):
         self._layer_map_cache.clear()
+        self._map_chain_cache.clear()
 
     @staticmethod
     def _map_signature(layer: BaseARTMAP) -> tuple[int, int, int, int]:
@@ -248,6 +246,25 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
             map_arr[int(k)] = int(v)
         self._layer_map_cache[layer_idx] = (sig, map_arr)
         return map_arr
+
+    def _get_map_chain_arrays(self, start_level: int) -> Optional[list[np.ndarray]]:
+        chain_sigs: list[tuple[int, int, int, int]] = []
+        chain_arrays: list[np.ndarray] = []
+        for i in range(start_level, -1, -1):
+            sig = self._map_signature(self.layers[i])
+            map_arr = self._get_layer_map_array(i)
+            if map_arr is None:
+                return None
+            chain_sigs.append(sig)
+            chain_arrays.append(map_arr)
+
+        sigs_key = tuple(chain_sigs)
+        cached = self._map_chain_cache.get(start_level)
+        if cached is not None and cached[0] == sigs_key:
+            return cached[1]
+
+        self._map_chain_cache[start_level] = (sigs_key, chain_arrays)
+        return chain_arrays
 
     def _map_layer_labels(self, layer_idx: int, y_a: np.ndarray) -> np.ndarray:
         map_arr = self._get_layer_map_array(layer_idx)
@@ -513,13 +530,7 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         pred[n_layers - 1] = pred_a
         pred[n_layers] = pred_b
         if isinstance(pred_b, np.ndarray) and MapSimpleARTMAPLabelsChainLevels is not None:
-            chain = []
-            for i in range(n_layers - 2, -1, -1):
-                map_arr = self._get_layer_map_array(i)
-                if map_arr is None:
-                    chain = []
-                    break
-                chain.append(map_arr)
+            chain = self._get_map_chain_arrays(n_layers - 2)
             if chain:
                 try:
                     mapped_levels = MapSimpleARTMAPLabelsChainLevels(

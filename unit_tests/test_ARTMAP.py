@@ -152,3 +152,49 @@ def test_predict_regression_matches_centers(artmap_model):
     pred = artmap_model.predict_regression(X_prep)
 
     np.testing.assert_allclose(pred, expected, rtol=1e-10, atol=1e-12)
+
+
+def test_predict_regression_reuses_numeric_centers_cache(artmap_model, monkeypatch):
+    np.random.seed(9)
+    X = np.random.rand(16, 4)
+    y = np.random.rand(16, 4)
+
+    X_prep, y_prep = artmap_model.prepare_data(X, y)
+    artmap_model.fit(X_prep, y_prep, max_iter=1)
+
+    calls = {"n": 0}
+    orig = artmap_model.module_b.get_cluster_centers
+
+    def _count_centers():
+        calls["n"] += 1
+        return orig()
+
+    monkeypatch.setattr(artmap_model.module_b, "get_cluster_centers", _count_centers)
+    pred1 = artmap_model.predict_regression(X_prep)
+    pred2 = artmap_model.predict_regression(X_prep)
+
+    assert calls["n"] == 1
+    np.testing.assert_allclose(pred1, pred2, rtol=1e-10, atol=1e-12)
+
+
+def test_partial_fit_invalidates_numeric_centers_cache(artmap_model, monkeypatch):
+    np.random.seed(11)
+    X = np.random.rand(18, 4)
+    y = np.random.rand(18, 4)
+
+    X_prep, y_prep = artmap_model.prepare_data(X, y)
+    artmap_model.fit(X_prep, y_prep, max_iter=1)
+    artmap_model.predict_regression(X_prep)
+
+    calls = {"n": 0}
+    orig = artmap_model.module_b.get_cluster_centers
+
+    def _count_centers():
+        calls["n"] += 1
+        return orig()
+
+    monkeypatch.setattr(artmap_model.module_b, "get_cluster_centers", _count_centers)
+    artmap_model.partial_fit(X_prep[:5], y_prep[:5])
+    artmap_model.predict_regression(X_prep)
+
+    assert calls["n"] == 1

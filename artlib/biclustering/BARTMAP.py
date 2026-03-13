@@ -49,6 +49,19 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
     rows_: np.ndarray  # bool
     columns_: np.ndarray  # bool
 
+    @staticmethod
+    def _build_bicluster_masks(
+        row_labels: np.ndarray,
+        col_labels: np.ndarray,
+        n_row_clusters: int,
+        n_col_clusters: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        row_mask = row_labels[np.newaxis, :] == np.arange(n_row_clusters)[:, np.newaxis]
+        col_mask = col_labels[np.newaxis, :] == np.arange(n_col_clusters)[:, np.newaxis]
+        return np.repeat(row_mask, n_col_clusters, axis=0), np.tile(
+            col_mask, (n_row_clusters, 1)
+        )
+
     def __init__(self, module_a: BaseART, module_b: BaseART, eta: float):
         """Initialize the BARTMAP model.
 
@@ -70,6 +83,14 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self._cpp_average_available = AveragePearsonCorr is not None
         self._cpp_match_available = AnyClusterMatch is not None
         self._module_b_n_clusters_cached: Optional[int] = None
+        self._column_cluster_masks: Optional[list[np.ndarray]] = None
+        self._column_cluster_labels_ref = None
+        self._column_cluster_rows_cache = None
+        self._column_cluster_rows_X_ref = None
+        self._column_cluster_rows_labels_ref = None
+        self._column_cluster_feature_views_cache = None
+        self._column_cluster_feature_views_X_ref = None
+        self._column_cluster_feature_views_labels_ref = None
         self._match_reset_extra: Optional[dict] = None
         self._match_reset_state = {"k": 0, "match_state": {}}
         self._step_match_reset_func_cached = self._step_match_reset_func
@@ -240,7 +261,11 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             the b-side cluster `c_b`.
 
         """
-        b_components = self.module_b.labels_ == c_b
+        masks = self._column_cluster_masks
+        if masks is not None and 0 <= c_b < len(masks):
+            b_components = masks[c_b]
+        else:
+            b_components = self.module_b.labels_ == c_b
         return x[b_components]
 
     @staticmethod
@@ -291,12 +316,13 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
                 # Preserve Python/scipy implementation as authoritative fallback.
                 pass
 
-        X_a = X[self.column_labels_ == c_b, :]
+        feature_views = self._ensure_column_cluster_feature_views(X)
+        X_a = feature_views[c_b]
         if len(X_a) == 0:
             raise ValueError("X_a has length 0")
-        X_k_cb = self._get_x_cb(X[k, :], c_b)
+        X_k_cb = X_a[k, :]
         mean_r = np.mean(
-            [self._pearsonr(X_k_cb, self._get_x_cb(x_a_l, c_b)) for x_a_l in X_a]
+            [self._pearsonr(X_k_cb, x_a_l) for x_a_l in X_a]
         )
         return float(mean_r)
 
@@ -356,6 +382,62 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self._cpp_metrics_labels = None
         self._cpp_metrics_X_ref = None
         self._cpp_metrics_labels_ref = None
+        self._column_cluster_masks = None
+        self._column_cluster_labels_ref = None
+        self._column_cluster_rows_cache = None
+        self._column_cluster_rows_X_ref = None
+        self._column_cluster_rows_labels_ref = None
+        self._column_cluster_feature_views_cache = None
+        self._column_cluster_feature_views_X_ref = None
+        self._column_cluster_feature_views_labels_ref = None
+
+    def _ensure_column_cluster_masks(self) -> list[np.ndarray]:
+        masks = self._column_cluster_masks
+        labels = self.column_labels_
+        n_clusters = self._module_b_n_clusters()
+        if (
+            masks is None
+            or len(masks) != n_clusters
+            or self._column_cluster_labels_ref is not labels
+        ):
+            masks = [labels == c_b for c_b in range(n_clusters)]
+            self._column_cluster_masks = masks
+            self._column_cluster_labels_ref = labels
+        return masks
+
+    def _ensure_column_cluster_rows(self, X: np.ndarray) -> list[np.ndarray]:
+        rows_cache = self._column_cluster_rows_cache
+        labels = self.column_labels_
+        n_clusters = self._module_b_n_clusters()
+        if (
+            rows_cache is None
+            or len(rows_cache) != n_clusters
+            or self._column_cluster_rows_X_ref is not X
+            or self._column_cluster_rows_labels_ref is not labels
+        ):
+            masks = self._ensure_column_cluster_masks()
+            rows_cache = [X[masks[c_b], :] for c_b in range(n_clusters)]
+            self._column_cluster_rows_cache = rows_cache
+            self._column_cluster_rows_X_ref = X
+            self._column_cluster_rows_labels_ref = labels
+        return rows_cache
+
+    def _ensure_column_cluster_feature_views(self, X: np.ndarray) -> list[np.ndarray]:
+        feature_views = self._column_cluster_feature_views_cache
+        labels = self.column_labels_
+        n_clusters = self._module_b_n_clusters()
+        if (
+            feature_views is None
+            or len(feature_views) != n_clusters
+            or self._column_cluster_feature_views_X_ref is not X
+            or self._column_cluster_feature_views_labels_ref is not labels
+        ):
+            masks = self._ensure_column_cluster_masks()
+            feature_views = [X[:, masks[c_b]] for c_b in range(n_clusters)]
+            self._column_cluster_feature_views_cache = feature_views
+            self._column_cluster_feature_views_X_ref = X
+            self._column_cluster_feature_views_labels_ref = labels
+        return feature_views
 
     def _ensure_cpp_metric_cache(self, X: np.ndarray):
         """Create or refresh contiguous buffers used by optional C++ metric helpers."""
@@ -377,6 +459,15 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         if self._module_b_n_clusters_cached is None:
             self._module_b_n_clusters_cached = len(self.module_b.W)
         return int(self._module_b_n_clusters_cached)
+
+    def _any_cluster_match_python(self, k: int) -> bool:
+        X = self.X
+        eta = float(self.params["eta"])
+        average_pearson_corr = self._average_pearson_corr
+        for cluster_b in range(self._module_b_n_clusters()):
+            if average_pearson_corr(X, k, cluster_b) >= eta:
+                return True
+        return False
 
     def match_reset_func(
         self,
@@ -436,14 +527,10 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
                 # Preserve Python loop as authoritative fallback.
                 pass
 
-        for cluster_b in range(n_clusters_b):
-            if self.match_criterion_bin(self.X, k, cluster_b, params):
-                if isinstance(match_state, dict):
-                    match_state["any_cluster_match"] = True
-                return True
+        result = self._any_cluster_match_python(k)
         if isinstance(match_state, dict):
-            match_state["any_cluster_match"] = False
-        return False
+            match_state["any_cluster_match"] = result
+        return result
 
     def _step_match_reset_func(self, i, w, cluster, params, cache):
         assert self._match_reset_extra is not None
@@ -455,6 +542,19 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             extra=self._match_reset_extra,
             cache=cache,
         )
+
+    def _step_fit_sample(self, x_k: np.ndarray, k: int) -> int:
+        state = self._match_reset_state
+        state["k"] = k
+        match_state = state["match_state"]
+        match_state.clear()
+        self._match_reset_extra = state
+        try:
+            return self.module_a.step_fit(
+                x_k, match_reset_func=self._step_match_reset_func_cached
+            )
+        finally:
+            self._match_reset_extra = None
 
     def step_fit(self, X: np.ndarray, k: int) -> int:
         """Fit the model to a single sample.
@@ -472,17 +572,7 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             The cluster label of the input sample.
 
         """
-        state = self._match_reset_state
-        state["k"] = k
-        match_state = state["match_state"]
-        match_state.clear()
-        self._match_reset_extra = state
-        try:
-            return self.module_a.step_fit(
-                X[k, :], match_reset_func=self._step_match_reset_func_cached
-            )
-        finally:
-            self._match_reset_extra = None
+        return self._step_fit_sample(X[k, :], k)
 
     def fit(self, X: np.ndarray, max_iter=1):
         """Fit the model to the data.
@@ -508,6 +598,7 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self.module_b = self.module_b.fit(X_b, max_iter=max_iter)
         self._module_b_n_clusters_cached = len(self.module_b.W)
         self._ensure_cpp_metric_cache(self.X)
+        self._ensure_column_cluster_masks()
         n_col_clusters = self.module_b.n_clusters
 
         # init module A
@@ -517,21 +608,20 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         module_a.labels_ = labels
         pre_step_fit = module_a.pre_step_fit
         post_step_fit = module_a.post_step_fit
-        step_fit = self.step_fit
+        step_fit_sample = self._step_fit_sample
 
         for _ in range(max_iter):
             for k in range(n):
                 pre_step_fit(X_a)
-                labels[k] = step_fit(X_a, k)
+                labels[k] = step_fit_sample(X_a[k, :], k)
                 post_step_fit(X_a)
 
         n_row_clusters = module_a.n_clusters
         row_labels = self.row_labels_
         col_labels = self.column_labels_
-        row_mask = row_labels[np.newaxis, :] == np.arange(n_row_clusters)[:, np.newaxis]
-        col_mask = col_labels[np.newaxis, :] == np.arange(n_col_clusters)[:, np.newaxis]
-        self.rows_ = np.repeat(row_mask, n_col_clusters, axis=0)
-        self.columns_ = np.tile(col_mask, (n_row_clusters, 1))
+        self.rows_, self.columns_ = self._build_bicluster_masks(
+            row_labels, col_labels, n_row_clusters, n_col_clusters
+        )
         return self
 
     def visualize(self, cmap: Optional[Colormap] = None):
