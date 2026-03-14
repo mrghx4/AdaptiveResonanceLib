@@ -1,5 +1,8 @@
+import importlib
+import builtins
 import numpy as np
 
+import artlib.common.utils as utils_module
 from artlib.common.utils import fracsort, fracargmax
 
 
@@ -100,3 +103,65 @@ def test_fracargmax_matches_numpy_with_tiebreaks() -> None:
     # The key above uses -i so larger key corresponds to lower index.
 
     assert int(idx_cpp) == int(best)
+
+
+def test_fracsort_python_fallback_matches_reference(monkeypatch) -> None:
+    rng = np.random.default_rng(2)
+    den = rng.integers(1, 1000, size=256, dtype=np.uint32)
+    num = rng.integers(0, den + 1, size=256, dtype=np.uint32)
+
+    monkeypatch.setattr(utils_module, "_fracsort", None)
+    idx_fallback = utils_module.fracsort(num, den)
+
+    ratio = num.astype(np.float64) / den.astype(np.float64)
+    idx_np = np.argsort(-ratio, kind="stable")
+    zero = num == 0
+    k = int(np.count_nonzero(~zero))
+
+    assert np.array_equal(idx_fallback[:k], idx_np[:k])
+    assert np.all(zero[idx_fallback[k:]])
+
+
+def test_fracargmax_python_fallback_matches_reference(monkeypatch) -> None:
+    rng = np.random.default_rng(3)
+    den = rng.integers(1, 1000, size=256, dtype=np.uint32)
+    num = rng.integers(0, den + 1, size=256, dtype=np.uint32)
+
+    tie_idx = np.array([5, 7, 11], dtype=np.int64)
+    den[tie_idx[0]] = np.uint32(2)
+    num[tie_idx[0]] = np.uint32(1)
+    den[tie_idx[1]] = np.uint32(4)
+    num[tie_idx[1]] = np.uint32(2)
+    den[tie_idx[2]] = np.uint32(4)
+    num[tie_idx[2]] = np.uint32(2)
+
+    monkeypatch.setattr(utils_module, "_fracargmax", None)
+    idx_fallback = utils_module.fracargmax(num, den)
+
+    ratio = num.astype(np.float64) / den.astype(np.float64)
+    max_ratio = ratio.max()
+    candidates = np.flatnonzero(ratio == max_ratio)
+    best = max(candidates, key=lambda i: (int(den[i]), -int(i)))
+
+    assert int(idx_fallback) == int(best)
+
+
+def test_utils_imports_without_cpp_fracsort_extension(monkeypatch) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "artlib.optimized.backends.cpp.fracsort":
+            raise ImportError("missing fracsort extension")
+        return real_import(name, globals, locals, fromlist, level)
+
+    with monkeypatch.context() as m:
+        m.setattr(builtins, "__import__", _fake_import)
+        reloaded = importlib.reload(utils_module)
+        assert reloaded._fracsort is None
+        assert reloaded._fracargmax is None
+        assert np.array_equal(
+            reloaded.fracsort(np.array([1, 2], dtype=np.uint32), np.array([2, 3], dtype=np.uint32)),
+            np.array([1, 0], dtype=np.intp),
+        )
+
+    importlib.reload(utils_module)

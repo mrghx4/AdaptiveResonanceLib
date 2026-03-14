@@ -1,12 +1,71 @@
 """General utilities used throughout ARTLib."""
+from functools import cmp_to_key
 import numpy as np
 from numba import njit
 from typing import Tuple, Optional, Mapping, Sequence, Union, Any
 from numpy.typing import ArrayLike, NDArray
-from artlib.optimized.backends.cpp.fracsort import fracsort as _fracsort
-from artlib.optimized.backends.cpp.fracsort import fracargmax as _fracargmax
+
+try:
+    from artlib.optimized.backends.cpp.fracsort import fracsort as _fracsort
+    from artlib.optimized.backends.cpp.fracsort import fracargmax as _fracargmax
+except ImportError:  # pragma: no cover - optional acceleration module
+    _fracsort = None
+    _fracargmax = None
 
 IndexableOrKeyable = Union[Mapping[Any, Any], Sequence[Any]]
+
+
+def _fraction_inputs(num: ArrayLike, den: ArrayLike) -> tuple[np.ndarray, np.ndarray]:
+    num_arr = np.asarray(num)
+    den_arr = np.asarray(den)
+    if num_arr.ndim != 1 or den_arr.ndim != 1:
+        raise ValueError("num and den must be 1-D")
+    if num_arr.shape != den_arr.shape:
+        raise ValueError("num and den must have the same shape")
+    if np.any(den_arr < 1):
+        raise ValueError("denominators must be >= 1")
+    return num_arr, den_arr
+
+
+def _fracsort_fallback(num: ArrayLike, den: ArrayLike) -> NDArray[np.intp]:
+    num_arr, den_arr = _fraction_inputs(num, den)
+    indices = list(range(num_arr.shape[0]))
+
+    def _cmp(i: int, j: int) -> int:
+        left = int(num_arr[i]) * int(den_arr[j])
+        right = int(num_arr[j]) * int(den_arr[i])
+        if left > right:
+            return -1
+        if left < right:
+            return 1
+        if i < j:
+            return -1
+        if i > j:
+            return 1
+        return 0
+
+    indices.sort(key=cmp_to_key(_cmp))
+    return np.asarray(indices, dtype=np.intp)
+
+
+def _fracargmax_fallback(num: ArrayLike, den: ArrayLike) -> np.intp:
+    num_arr, den_arr = _fraction_inputs(num, den)
+    if num_arr.shape[0] == 0:
+        raise ValueError("num and den must be non-empty")
+
+    best = 0
+    for idx in range(1, num_arr.shape[0]):
+        left = int(num_arr[idx]) * int(den_arr[best])
+        right = int(num_arr[best]) * int(den_arr[idx])
+        if left > right:
+            best = idx
+            continue
+        if left == right:
+            den_i = int(den_arr[idx])
+            den_best = int(den_arr[best])
+            if den_i > den_best or (den_i == den_best and idx < best):
+                best = idx
+    return np.intp(best)
 
 
 def normalize(
@@ -202,7 +261,9 @@ def fracsort(num: ArrayLike, den: ArrayLike) -> NDArray[np.intp]:
         the lowest index.
 
     """
-    return _fracsort(num, den)
+    if _fracsort is not None:
+        return _fracsort(num, den)
+    return _fracsort_fallback(num, den)
 
 
 def fracargmax(num: ArrayLike, den: ArrayLike) -> np.intp:
@@ -230,7 +291,9 @@ def fracargmax(num: ArrayLike, den: ArrayLike) -> np.intp:
         by larger denominator first, then the lowest index.
 
     """
-    return _fracargmax(num, den)
+    if _fracargmax is not None:
+        return _fracargmax(num, den)
+    return _fracargmax_fallback(num, den)
 
 
 def binarize_features_thermometer(data: np.ndarray, n_bits: int) -> np.ndarray:
