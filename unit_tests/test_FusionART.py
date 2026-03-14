@@ -115,6 +115,24 @@ def test_step_fit(fusionart_model):
     )  # Ensure the result is an integer cluster label
 
 
+def test_step_fit_avoids_deep_copy_when_first_category_matches(fusionart_model, monkeypatch):
+    X = [np.random.rand(10, 2), np.random.rand(10, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    deep_copy_calls = 0
+    original_deep_copy = fusionart_model._deep_copy_params
+
+    def _counting_deep_copy():
+        nonlocal deep_copy_calls
+        deep_copy_calls += 1
+        return original_deep_copy()
+
+    monkeypatch.setattr(fusionart_model, "_deep_copy_params", _counting_deep_copy)
+    fusionart_model.step_fit(X_prep[0])
+    assert deep_copy_calls == 0
+
+
 def test_step_pred(fusionart_model):
     # Test the step_pred method
     X = [np.random.rand(10, 2), np.random.rand(10, 2)]
@@ -238,6 +256,25 @@ def test_get_cluster_centers_cache_reuse_and_invalidate(fusionart_model):
     w0 = fusionart_model.W[0]
     fusionart_model.set_weight(0, w0)
     assert fusionart_model._cluster_centers_cache is None
+
+
+def test_get_cluster_centers_uses_cached_channel_center_arrays(fusionart_model):
+    X = [np.random.rand(18, 2), np.random.rand(18, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    _ = fusionart_model.predict_regression(X_prep, target_channels=[0, 1])
+    assert 0 in fusionart_model._channel_centers_cache
+    assert 1 in fusionart_model._channel_centers_cache
+
+    def _unexpected_channel_center_call():
+        raise AssertionError("module.get_cluster_centers should not be called")
+
+    fusionart_model.modules[0].get_cluster_centers = _unexpected_channel_center_call
+    fusionart_model.modules[1].get_cluster_centers = _unexpected_channel_center_call
+
+    centers = fusionart_model.get_cluster_centers()
+    assert len(centers) == fusionart_model.n_clusters
 
 
 def test_join_channel_data(fusionart_model):

@@ -110,10 +110,14 @@ class FusionART(BaseART):
         self.n = len(self.modules)
         self.channel_dims = channel_dims
         self._channel_indices = get_channel_position_tuples(self.channel_dims)
+        self._channel_slices = tuple(slice(start, end) for start, end in self._channel_indices)
         self._gamma_values = np.asarray(self.params["gamma_values"], dtype=float)
+        self._channel_dims_i64 = np.asarray(self.channel_dims, dtype=np.int64)
         self._cpp_fusion_argmax_threshold = 64
         self._channel_centers_cache: dict[int, np.ndarray] = {}
         self._cluster_centers_cache: Optional[np.ndarray] = None
+        self._present_mask_cache: dict[tuple[int, ...], np.ndarray] = {}
+        self._active_channels_cache: dict[tuple[int, ...], tuple[int, ...]] = {}
         self.dim_ = sum(channel_dims)
 
     def _invalidate_channel_centers_cache(self):
@@ -221,8 +225,27 @@ class FusionART(BaseART):
         return [self.modules[k].W[c_idx] for k in range(self.n)]
 
     def _split_sample_channels(self, i: np.ndarray) -> list[np.ndarray]:
-        idxs = self._channel_indices
-        return [i[s:e] for (s, e) in idxs]
+        return [i[channel_slice] for channel_slice in self._channel_slices]
+
+    @staticmethod
+    def _skip_key(skip: set[int]) -> tuple[int, ...]:
+        return tuple(sorted(skip))
+
+    def _present_mask(self, skip: set[int]) -> np.ndarray:
+        key = self._skip_key(skip)
+        cached = self._present_mask_cache.get(key)
+        if cached is None:
+            cached = np.array([k not in skip for k in range(self.n)], dtype=np.uint8)
+            self._present_mask_cache[key] = cached
+        return cached
+
+    def _active_channels(self, skip: set[int]) -> tuple[int, ...]:
+        key = self._skip_key(skip)
+        cached = self._active_channels_cache.get(key)
+        if cached is None:
+            cached = tuple(k for k in range(self.n) if k not in skip)
+            self._active_channels_cache[key] = cached
+        return cached
 
     def _category_choice_idx(
         self,
@@ -232,15 +255,14 @@ class FusionART(BaseART):
         i_parts: Optional[list[np.ndarray]] = None,
     ) -> Tuple[float, Dict]:
         skip = self._normalize_skip_channels(skip_channels)
+        active_channels = self._active_channels(skip)
         modules = self.modules
         parts = i_parts if i_parts is not None else self._split_sample_channels(i)
         activation = 0.0
-        caches: Dict[int, Dict] = {}
-        for k in range(self.n):
-            if k in skip:
-                activation += self._gamma_values[k]
-                caches[k] = {}
-                continue
+        caches: Dict[int, Dict] = {k: {} for k in skip}
+        if skip:
+            activation = float(np.sum(self._gamma_values[list(skip)]))
+        for k in active_channels:
             a_k, c_k = modules[k].category_choice(
                 parts[k],
                 modules[k].W[c_idx],
@@ -257,13 +279,14 @@ class FusionART(BaseART):
         skip: set[int],
         i_parts: Optional[list[np.ndarray]] = None,
     ) -> float:
+        active_channels = self._active_channels(skip)
         modules = self.modules
         parts = i_parts if i_parts is not None else self._split_sample_channels(i)
-        activation = 0.0
-        for k in range(self.n):
-            if k in skip:
-                activation += self._gamma_values[k]
-                continue
+        if skip:
+            activation = float(np.sum(self._gamma_values[list(skip)]))
+        else:
+            activation = 0.0
+        for k in active_channels:
             a_k, _ = modules[k].category_choice(
                 parts[k],
                 modules[k].W[c_idx],
@@ -282,14 +305,12 @@ class FusionART(BaseART):
         i_parts: Optional[list[np.ndarray]] = None,
     ) -> Tuple[bool, Dict]:
         skip = self._normalize_skip_channels(skip_channels)
+        active_channels = self._active_channels(skip)
         modules = self.modules
         parts = i_parts if i_parts is not None else self._split_sample_channels(i)
-        caches: Dict[int, Dict] = {}
+        caches: Dict[int, Dict] = {k: {"match_criterion": np.inf} for k in skip}
         all_match = True
-        for k in range(self.n):
-            if k in skip:
-                caches[k] = {"match_criterion": np.inf}
-                continue
+        for k in active_channels:
             mb_k, c_k = modules[k].match_criterion_bin(
                 parts[k],
                 modules[k].W[c_idx],
@@ -648,12 +669,19 @@ class FusionART(BaseART):
 
         """
         self.sample_counter_ += 1
-        base_params = self._deep_copy_params()
+        base_params: Optional[list[Dict]] = None
         mt_operator = self._match_tracking_operator(match_tracking)
         n_categories = self._n_categories()
         x_parts = self._split_sample_channels(x)
+        params_self = self.params
+        category_choice_idx = self._category_choice_idx
+        match_criterion_bin_idx = self._match_criterion_bin_idx
+        update_idx = self._update_idx
+        cluster_weight = self._cluster_weight
+        match_tracking_fn = self._match_tracking
+        set_params = self._set_params
         if n_categories == 0:
-            w_new = self.new_weight(x, self.params)
+            w_new = self.new_weight(x, params_self)
             self.add_weight(w_new)
             return 0
         else:
@@ -661,14 +689,14 @@ class FusionART(BaseART):
             T_cache: List[Optional[Dict]] = [None] * n_categories
             if match_tracking in ["MT~"] and match_reset_func is not None:
                 for c_ in range(n_categories):
-                    w = self._cluster_weight(c_)
-                    if match_reset_func(x, w, c_, params=self.params, cache=None):
-                        t, c = self._category_choice_idx(x, c_, i_parts=x_parts)
+                    w = cluster_weight(c_)
+                    if match_reset_func(x, w, c_, params=params_self, cache=None):
+                        t, c = category_choice_idx(x, c_, i_parts=x_parts)
                         T_values[c_] = t
                         T_cache[c_] = c
             else:
                 for c_ in range(n_categories):
-                    t, c = self._category_choice_idx(x, c_, i_parts=x_parts)
+                    t, c = category_choice_idx(x, c_, i_parts=x_parts)
                     T_values[c_] = t
                     T_cache[c_] = c
 
@@ -687,33 +715,81 @@ class FusionART(BaseART):
                 c_ = int(c_idx)
                 cache = T_cache[c_]
                 assert cache is not None
-                m, cache = self._match_criterion_bin_idx(
+                m, cache = match_criterion_bin_idx(
                     x, c_, cache=cache, op=mt_operator, i_parts=x_parts
                 )
 
                 if match_tracking in ["MT~"] and match_reset_func is not None:
                     no_match_reset = True
                 else:
-                    w = self._cluster_weight(c_)
+                    w = cluster_weight(c_)
                     no_match_reset = match_reset_func is None or match_reset_func(
-                        x, w, c_, params=self.params, cache=cache
+                        x, w, c_, params=params_self, cache=cache
                     )
 
                 if m and no_match_reset:
-                    self.set_weight(c_, self._update_idx(x, c_, cache, i_parts=x_parts))
-                    self._set_params(base_params)
+                    self.set_weight(c_, update_idx(x, c_, cache, i_parts=x_parts))
+                    if base_params is not None:
+                        set_params(base_params)
                     return c_
-                keep_searching = self._match_tracking(
+                if base_params is None:
+                    base_params = self._deep_copy_params()
+                keep_searching = match_tracking_fn(
                     cache, epsilon, params, match_tracking
                 )
                 if not keep_searching:
                     break
 
             c_new = n_categories
-            w_new = self.new_weight(x, self.params)
+            w_new = self.new_weight(x, params_self)
             self.add_weight(w_new)
-            self._set_params(base_params)
+            if base_params is not None:
+                set_params(base_params)
             return c_new
+
+    def fit(
+        self,
+        X: np.ndarray,
+        y: Optional[np.ndarray] = None,
+        match_reset_func: Optional[Callable] = None,
+        max_iter=1,
+        match_tracking: Literal["MT+", "MT-", "MT0", "MT1", "MT~"] = "MT+",
+        epsilon: float = 0.0,
+        verbose: bool = False,
+        leave_progress_bar: bool = True,
+    ):
+        self.validate_data(X)
+        self.check_dimensions(X)
+        self.is_fitted_ = True
+
+        self.W = []
+        self.labels_ = np.zeros((X.shape[0],), dtype=int)
+        self.sample_counter_ = 0
+        labels = self.labels_
+        pre_step_fit = self.pre_step_fit
+        step_fit = self.step_fit
+        post_step_fit = self.post_step_fit
+
+        for _ in range(max_iter):
+            if verbose:
+                from tqdm import tqdm
+
+                x_iter = tqdm(
+                    enumerate(X), total=int(X.shape[0]), leave=leave_progress_bar
+                )
+            else:
+                x_iter = enumerate(X)
+            for i, x in x_iter:
+                pre_step_fit(X)
+                labels[i] = step_fit(
+                    x,
+                    match_reset_func=match_reset_func,
+                    match_tracking=match_tracking,
+                    epsilon=epsilon,
+                )
+                post_step_fit(X)
+        self.post_fit(X)
+        return self
 
     def partial_fit(
         self,
@@ -747,14 +823,16 @@ class FusionART(BaseART):
         else:
             j = len(self.labels_)
             self.labels_ = np.pad(self.labels_, [(0, X.shape[0])], mode="constant")
+        labels = self.labels_
+        step_fit = self.step_fit
         for i, x in enumerate(X):
-            c = self.step_fit(
+            c = step_fit(
                 x,
                 match_reset_func=match_reset_func,
                 match_tracking=match_tracking,
                 epsilon=epsilon,
             )
-            self.labels_[i + j] = c
+            labels[i + j] = c
         return self
 
     def step_pred(self, x, skip_channels: Optional[List[int]] = None) -> int:
@@ -956,6 +1034,16 @@ class FusionART(BaseART):
         if centers_arr is not None:
             return [centers_arr[i] for i in range(centers_arr.shape[0])]
 
+        cached_channel_centers = [
+            self._get_channel_centers_array_cached(channel) for channel in range(self.n)
+        ]
+        if all(center is not None for center in cached_channel_centers):
+            centers_arr = np.hstack(
+                [center for center in cached_channel_centers if center is not None]
+            )
+            self._cluster_centers_cache = np.ascontiguousarray(centers_arr, dtype=np.float64)
+            return [self._cluster_centers_cache[i] for i in range(self._cluster_centers_cache.shape[0])]
+
         centers_ = [module.get_cluster_centers() for module in self.modules]
         centers = [
             np.concatenate([centers_[k][i] for k in range(self.n)])
@@ -1106,8 +1194,8 @@ class FusionART(BaseART):
         formatted_channel_data = []
         n_samples: Optional[int] = None
         input_idx = 0
-        channel_widths = np.array(self.channel_dims, dtype=np.int64)
-        present_mask = np.array([k not in skip for k in range(self.n)], dtype=np.uint8)
+        channel_widths = self._channel_dims_i64
+        present_mask = self._present_mask(skip)
 
         for k in range(self.n):
             width = self._channel_indices[k][1] - self._channel_indices[k][0]
@@ -1177,10 +1265,8 @@ class FusionART(BaseART):
             )
 
         if ExtractPresentChannels is not None:
-            present_mask = np.array(
-                [k not in skip_channels for k in range(self.n)], dtype=np.uint8
-            )
-            channel_widths = np.array(self.channel_dims, dtype=np.int64)
+            present_mask = self._present_mask(skip_channels)
+            channel_widths = self._channel_dims_i64
             return list(
                 ExtractPresentChannels(joined_data, channel_widths, present_mask)
             )
