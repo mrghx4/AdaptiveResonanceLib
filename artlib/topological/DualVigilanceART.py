@@ -366,7 +366,7 @@ class DualVigilanceART(BaseART):
             Cluster label of the input sample.
 
         """
-        base_params = self._deep_copy_params()
+        base_params: Optional[dict] = None
         mt_operator = self._match_tracking_operator(match_tracking)
         self.sample_counter_ += 1
         base_mod = self.base_module
@@ -406,7 +406,8 @@ class DualVigilanceART(BaseART):
                     if m1:
                         new_w = base_mod.update(x, w, base_params_ref, cache=cache)
                         base_mod.set_weight(c_, new_w)
-                        self._set_params(base_params)
+                        if base_params is not None:
+                            self._set_params(base_params)
                         return mapped_label
                     else:
                         m2, _ = base_mod.match_criterion_bin(
@@ -418,9 +419,12 @@ class DualVigilanceART(BaseART):
                             base_mod.add_weight(w_new)
                             map_[c_new] = mapped_label
                             self._invalidate_map_lookup_cache()
-                            self._set_params(base_params)
+                            if base_params is not None:
+                                self._set_params(base_params)
                             return mapped_label
                 else:
+                    if base_params is None:
+                        base_params = self._deep_copy_params()
                     keep_searching = self._match_tracking(
                         cache, epsilon, self.params, match_tracking
                     )
@@ -434,7 +438,8 @@ class DualVigilanceART(BaseART):
             self.map[c_new] = new_label
             self._next_abstract_label = new_label + 1
             self._invalidate_map_lookup_cache()
-            self._set_params(base_params)
+            if base_params is not None:
+                self._set_params(base_params)
             return new_label
 
     def step_pred(self, x) -> int:

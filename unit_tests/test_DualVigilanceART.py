@@ -136,6 +136,23 @@ def test_step_pred(art_model):
     assert cluster_label == 0  # Predict should return the correct cluster
 
 
+def test_step_fit_avoids_deep_copy_when_first_category_matches(art_model, monkeypatch):
+    x = np.array([0.1, 0.2])
+    art_model.step_fit(x)
+
+    deep_copy_calls = 0
+    original_deep_copy = art_model._deep_copy_params
+
+    def _counting_deep_copy():
+        nonlocal deep_copy_calls
+        deep_copy_calls += 1
+        return original_deep_copy()
+
+    monkeypatch.setattr(art_model, "_deep_copy_params", _counting_deep_copy)
+    art_model.step_fit(x)
+    assert deep_copy_calls == 0
+
+
 def test_predict_matches_step_pred(art_model):
     X = np.array([[0.1, 0.2], [0.3, 0.4], [0.15, 0.25]])
     art_model.step_fit(X[0])

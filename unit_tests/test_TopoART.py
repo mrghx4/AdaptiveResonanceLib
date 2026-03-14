@@ -78,6 +78,24 @@ def test_step_fit(topoart_model):
         assert isinstance(label, int)
 
 
+def test_step_fit_avoids_deep_copy_when_first_category_matches(topoart_model, monkeypatch):
+    X = np.random.rand(10, 2)
+    X_prep = topoart_model.prepare_data(X)
+    topoart_model.fit(X_prep, max_iter=1)
+
+    deep_copy_calls = 0
+    original_deep_copy = topoart_model._deep_copy_params
+
+    def _counting_deep_copy():
+        nonlocal deep_copy_calls
+        deep_copy_calls += 1
+        return original_deep_copy()
+
+    monkeypatch.setattr(topoart_model, "_deep_copy_params", _counting_deep_copy)
+    topoart_model.step_fit(X_prep[0])
+    assert deep_copy_calls == 0
+
+
 def test_predict_matches_step_pred(topoart_model):
     X = np.random.rand(12, 2)
     X_prep = topoart_model.prepare_data(X)

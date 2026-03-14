@@ -495,7 +495,7 @@ class TopoART(BaseART):
             Cluster label of the input sample.
 
         """
-        base_params = self._deep_copy_params()
+        base_params: Optional[dict] = None
         mt_operator = self._match_tracking_operator(match_tracking)
         self.sample_counter_ += 1
         resonant_c: int = -1
@@ -547,16 +547,20 @@ class TopoART(BaseART):
                     if resonant_c < 0:
                         resonant_c = c_
                     else:
-                        self._set_params(base_params)
+                        if base_params is not None:
+                            self._set_params(base_params)
                         return resonant_c
                 elif not no_match_reset:
+                    if base_params is None:
+                        base_params = self._deep_copy_params()
                     keep_searching = self._match_tracking(
                         cache, epsilon, params_self, match_tracking
                     )
                     if not keep_searching:
                         break
 
-            self._set_params(base_params)
+            if base_params is not None:
+                self._set_params(base_params)
             if resonant_c < 0:
                 c_new = len(self.W)
                 w_new = self.new_weight(x, self.params)

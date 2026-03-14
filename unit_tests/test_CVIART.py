@@ -144,3 +144,28 @@ def test_cviart_fit_reuses_match_reset_wrapper(monkeypatch, cviart_model):
     cviart_model.fit(X_prep, max_iter=1)
     assert len(wrapper_ids) == X_prep.shape[0]
     assert len(set(wrapper_ids)) == 1
+
+
+def test_cviart_match_reset_wrapper_lazily_caches_baseline_validity(monkeypatch, cviart_model):
+    X = np.random.rand(10, 4)
+    X_prep = cviart_model.prepare_data(X)
+    cviart_model.data = X_prep
+    cviart_model.labels_ = np.random.randint(0, 2, size=(10,))
+    cviart_model.base_module.W = [np.random.rand(4), np.random.rand(4)]
+    cviart_model._fit_match_reset_index = 0
+    cviart_model._fit_match_reset_baseline = None
+
+    calls = {"n": 0}
+
+    def _count_eval(*args, **kwargs):
+        calls["n"] += 1
+        return 7.5
+
+    monkeypatch.setattr(cviart_model, "_evaluate_validity", _count_eval)
+    monkeypatch.setattr(cviart_model, "CVI_match", lambda *args, **kwargs: True)
+
+    cviart_model._fit_match_reset_wrapper(X_prep[0], np.random.rand(4), 0, cviart_model.params, {})
+    cviart_model._fit_match_reset_wrapper(X_prep[1], np.random.rand(4), 1, cviart_model.params, {})
+
+    assert calls["n"] == 1
+    assert cviart_model._fit_match_reset_baseline == 7.5

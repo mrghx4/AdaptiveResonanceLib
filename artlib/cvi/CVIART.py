@@ -243,10 +243,16 @@ class CVIART(BaseART):
         return deepcopy(self.base_module.params)
 
     def _fit_match_reset_wrapper(self, i, w, cluster_a, params, cache):
+        baseline_validity = self._fit_match_reset_baseline
+        if baseline_validity is None and len(self.W) >= 2:
+            baseline_validity = self._evaluate_validity(
+                self.data, self.labels_, self.params["validity"]
+            )
+            self._fit_match_reset_baseline = baseline_validity
         extra = {
             "index": self._fit_match_reset_index,
             "validity": self.params["validity"],
-            "baseline_validity": self._fit_match_reset_baseline,
+            "baseline_validity": baseline_validity,
         }
         if self._fit_match_reset_user is not None and not self._fit_match_reset_user(
             i, w, cluster_a, params, cache
@@ -295,16 +301,11 @@ class CVIART(BaseART):
         pre_step_fit = self.pre_step_fit
         post_step_fit = self.post_step_fit
         step_fit = self.base_module.step_fit
-        validity = self.params["validity"]
-        evaluate_validity = self._evaluate_validity
         for _ in range(max_iter):
             for index, x in enumerate(X):
                 pre_step_fit(X)
-                baseline_validity = None
-                if len(self.W) >= 2:
-                    baseline_validity = evaluate_validity(self.data, labels, validity)
                 self._fit_match_reset_index = index
-                self._fit_match_reset_baseline = baseline_validity
+                self._fit_match_reset_baseline = None
                 c = step_fit(
                     x,
                     match_reset_func=self._fit_match_reset_func,

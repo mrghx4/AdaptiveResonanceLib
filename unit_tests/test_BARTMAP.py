@@ -98,6 +98,33 @@ def test_average_pearson_corr_python_fallback(monkeypatch, bartmap_model):
     assert isinstance(r, float)
 
 
+def test_average_pearson_corr_vectorized_python_fallback_matches_reference(monkeypatch, bartmap_model):
+    X = np.array(
+        [
+            [0.2, 0.5, 0.9, 0.1, 0.7],
+            [0.3, 0.4, 0.8, 0.2, 0.6],
+            [0.8, 0.1, 0.2, 0.9, 0.3],
+            [0.7, 0.2, 0.3, 0.8, 0.4],
+        ],
+        dtype=np.float64,
+    )
+    bartmap_model.X = X
+    bartmap_model.module_b.W = [np.array([0.0]), np.array([1.0])]
+    bartmap_model.module_b.labels_ = np.array([0, 0, 1, 1, 0], dtype=int)
+    bartmap_model._module_b_n_clusters_cached = 2
+    bartmap_model._reset_cpp_metric_cache()
+
+    monkeypatch.setattr(bartmap_module, "AveragePearsonCorr", None)
+    bartmap_model._cpp_average_available = False
+
+    features = X[:, bartmap_model.module_b.labels_ == 0]
+    expected = float(
+        np.mean([bartmap_model._pearsonr(features[1], row) for row in features])
+    )
+    actual = bartmap_model._average_pearson_corr(X, k=1, c_b=0)
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-12, equal_nan=True)
+
+
 def test_match_reset_func_python_fallback(monkeypatch, bartmap_model):
     X = np.random.rand(10, 10)
     bartmap_model.X = X
@@ -228,6 +255,23 @@ def test_column_cluster_feature_views_cache_reused_and_refreshes(bartmap_model):
     X2 = X.copy()
     views_3 = bartmap_model._ensure_column_cluster_feature_views(X2)
     assert views_3 is not views_1
+
+
+def test_column_cluster_corr_stats_cache_reused_and_refreshes(bartmap_model):
+    X = np.random.rand(8, 8)
+    bartmap_model.X = X
+
+    X_b = bartmap_model.module_b.prepare_data(X.T)
+    bartmap_model.module_b = bartmap_model.module_b.fit(X_b, max_iter=1)
+    stats_1 = bartmap_model._ensure_column_cluster_corr_stats(X)
+    stats_2 = bartmap_model._ensure_column_cluster_corr_stats(X)
+
+    assert stats_1[0] is stats_2[0]
+    assert stats_1[1] is stats_2[1]
+
+    X2 = X.copy()
+    stats_3 = bartmap_model._ensure_column_cluster_corr_stats(X2)
+    assert stats_3[0] is not stats_1[0]
 
 
 def test_cpp_label_converter_no_copy_for_int32_contiguous():

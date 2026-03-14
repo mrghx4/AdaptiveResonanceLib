@@ -91,6 +91,10 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self._column_cluster_feature_views_cache = None
         self._column_cluster_feature_views_X_ref = None
         self._column_cluster_feature_views_labels_ref = None
+        self._column_cluster_centered_feature_views_cache = None
+        self._column_cluster_feature_norms_cache = None
+        self._column_cluster_corr_stats_X_ref = None
+        self._column_cluster_corr_stats_labels_ref = None
         self._match_reset_extra: Optional[dict] = None
         self._match_reset_state = {"k": 0, "match_state": {}}
         self._step_match_reset_func_cached = self._step_match_reset_func
@@ -316,15 +320,21 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
                 # Preserve Python/scipy implementation as authoritative fallback.
                 pass
 
-        feature_views = self._ensure_column_cluster_feature_views(X)
-        X_a = feature_views[c_b]
+        centered_views, row_norms = self._ensure_column_cluster_corr_stats(X)
+        X_a = centered_views[c_b]
         if len(X_a) == 0:
             raise ValueError("X_a has length 0")
         X_k_cb = X_a[k, :]
-        mean_r = np.mean(
-            [self._pearsonr(X_k_cb, x_a_l) for x_a_l in X_a]
+        norm_k = float(row_norms[c_b][k])
+        numerators = X_a @ X_k_cb
+        denominators = row_norms[c_b] * norm_k
+        corrs = np.divide(
+            numerators,
+            denominators,
+            out=np.full(numerators.shape, np.nan, dtype=np.float64),
+            where=denominators > 0.0,
         )
-        return float(mean_r)
+        return float(np.mean(corrs))
 
     def validate_data(self, X_a: np.ndarray, X_b: np.ndarray):
         """Validate the data prior to clustering.
@@ -390,6 +400,10 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
         self._column_cluster_feature_views_cache = None
         self._column_cluster_feature_views_X_ref = None
         self._column_cluster_feature_views_labels_ref = None
+        self._column_cluster_centered_feature_views_cache = None
+        self._column_cluster_feature_norms_cache = None
+        self._column_cluster_corr_stats_X_ref = None
+        self._column_cluster_corr_stats_labels_ref = None
 
     def _ensure_column_cluster_masks(self) -> list[np.ndarray]:
         masks = self._column_cluster_masks
@@ -438,6 +452,34 @@ class BARTMAP(BaseEstimator, BiclusterMixin):
             self._column_cluster_feature_views_X_ref = X
             self._column_cluster_feature_views_labels_ref = labels
         return feature_views
+
+    def _ensure_column_cluster_corr_stats(
+        self, X: np.ndarray
+    ) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        centered_views = self._column_cluster_centered_feature_views_cache
+        row_norms = self._column_cluster_feature_norms_cache
+        labels = self.column_labels_
+        n_clusters = self._module_b_n_clusters()
+        if (
+            centered_views is None
+            or row_norms is None
+            or len(centered_views) != n_clusters
+            or len(row_norms) != n_clusters
+            or self._column_cluster_corr_stats_X_ref is not X
+            or self._column_cluster_corr_stats_labels_ref is not labels
+        ):
+            feature_views = self._ensure_column_cluster_feature_views(X)
+            centered_views = []
+            row_norms = []
+            for view in feature_views:
+                centered = view - np.mean(view, axis=1, keepdims=True)
+                centered_views.append(centered)
+                row_norms.append(np.linalg.norm(centered, axis=1))
+            self._column_cluster_centered_feature_views_cache = centered_views
+            self._column_cluster_feature_norms_cache = row_norms
+            self._column_cluster_corr_stats_X_ref = X
+            self._column_cluster_corr_stats_labels_ref = labels
+        return centered_views, row_norms
 
     def _ensure_cpp_metric_cache(self, X: np.ndarray):
         """Create or refresh contiguous buffers used by optional C++ metric helpers."""
