@@ -133,6 +133,39 @@ def test_step_fit_avoids_deep_copy_when_first_category_matches(fusionart_model, 
     assert deep_copy_calls == 0
 
 
+def test_category_choice_no_skip_helper_matches_general_path(fusionart_model):
+    X = [np.random.rand(10, 2), np.random.rand(10, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    x = X_prep[0]
+    x_parts = fusionart_model._split_sample_channels(x)
+    for c_idx in range(fusionart_model.n_clusters):
+        act_general, cache_general = fusionart_model._category_choice_idx(
+            x, c_idx, i_parts=x_parts
+        )
+        act_fast, cache_fast = fusionart_model._category_choice_idx_noskip(
+            x, c_idx, i_parts=x_parts
+        )
+        assert act_fast == pytest.approx(act_general)
+        assert cache_fast.keys() == cache_general.keys()
+
+
+def test_step_fit_uses_no_skip_fast_helpers(monkeypatch, fusionart_model):
+    X = [np.random.rand(12, 2), np.random.rand(12, 2)]
+    X_prep = fusionart_model.prepare_data(X)
+    fusionart_model.fit(X_prep, max_iter=1)
+
+    original_fast = fusionart_model._category_choice_idx_noskip
+
+    def _unexpected_general(*args, **kwargs):
+        raise AssertionError("general skip-aware helper should not be used")
+
+    monkeypatch.setattr(fusionart_model, "_category_choice_idx", _unexpected_general)
+    monkeypatch.setattr(fusionart_model, "_category_choice_idx_noskip", original_fast)
+    fusionart_model.step_fit(X_prep[0])
+
+
 def test_step_pred(fusionart_model):
     # Test the step_pred method
     X = [np.random.rand(10, 2), np.random.rand(10, 2)]

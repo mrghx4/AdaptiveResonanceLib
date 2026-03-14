@@ -272,6 +272,22 @@ class FusionART(BaseART):
             caches[k] = c_k
         return float(activation), caches
 
+    def _category_choice_idx_noskip(
+        self,
+        i: np.ndarray,
+        c_idx: int,
+        i_parts: Optional[list[np.ndarray]] = None,
+    ) -> Tuple[float, Dict]:
+        modules = self.modules
+        parts = i_parts if i_parts is not None else self._split_sample_channels(i)
+        activation = 0.0
+        caches: Dict[int, Dict] = {}
+        for k, mod in enumerate(modules):
+            a_k, c_k = mod.category_choice(parts[k], mod.W[c_idx], mod.params)
+            activation += a_k * self._gamma_values[k]
+            caches[k] = c_k
+        return float(activation), caches
+
     def _category_choice_value_idx(
         self,
         i: np.ndarray,
@@ -292,6 +308,20 @@ class FusionART(BaseART):
                 modules[k].W[c_idx],
                 modules[k].params,
             )
+            activation += a_k * self._gamma_values[k]
+        return float(activation)
+
+    def _category_choice_value_idx_noskip(
+        self,
+        i: np.ndarray,
+        c_idx: int,
+        i_parts: Optional[list[np.ndarray]] = None,
+    ) -> float:
+        modules = self.modules
+        parts = i_parts if i_parts is not None else self._split_sample_channels(i)
+        activation = 0.0
+        for k, mod in enumerate(modules):
+            a_k, _ = mod.category_choice(parts[k], mod.W[c_idx], mod.params)
             activation += a_k * self._gamma_values[k]
         return float(activation)
 
@@ -323,6 +353,31 @@ class FusionART(BaseART):
                 all_match = False
         return all_match, caches
 
+    def _match_criterion_bin_idx_noskip(
+        self,
+        i: np.ndarray,
+        c_idx: int,
+        cache: Dict,
+        op: Callable = operator.ge,
+        i_parts: Optional[list[np.ndarray]] = None,
+    ) -> Tuple[bool, Dict]:
+        modules = self.modules
+        parts = i_parts if i_parts is not None else self._split_sample_channels(i)
+        caches: Dict[int, Dict] = {}
+        all_match = True
+        for k, mod in enumerate(modules):
+            mb_k, c_k = mod.match_criterion_bin(
+                parts[k],
+                mod.W[c_idx],
+                mod.params,
+                cache[k],
+                op,
+            )
+            caches[k] = c_k
+            if not mb_k:
+                all_match = False
+        return all_match, caches
+
     def _update_idx(
         self,
         i: np.ndarray,
@@ -340,6 +395,20 @@ class FusionART(BaseART):
                 cache[k],
             )
             for k in range(self.n)
+        ]
+
+    def _update_idx_noskip(
+        self,
+        i: np.ndarray,
+        c_idx: int,
+        cache: Dict,
+        i_parts: Optional[list[np.ndarray]] = None,
+    ) -> list:
+        modules = self.modules
+        parts = i_parts if i_parts is not None else self._split_sample_channels(i)
+        return [
+            mod.update(parts[k], mod.W[c_idx], mod.params, cache[k])
+            for k, mod in enumerate(modules)
         ]
 
     def _normalize_skip_channels(self, skip_channels: Optional[List[int]]) -> set[int]:
@@ -674,9 +743,9 @@ class FusionART(BaseART):
         n_categories = self._n_categories()
         x_parts = self._split_sample_channels(x)
         params_self = self.params
-        category_choice_idx = self._category_choice_idx
-        match_criterion_bin_idx = self._match_criterion_bin_idx
-        update_idx = self._update_idx
+        category_choice_idx = self._category_choice_idx_noskip
+        match_criterion_bin_idx = self._match_criterion_bin_idx_noskip
+        update_idx = self._update_idx_noskip
         cluster_weight = self._cluster_weight
         match_tracking_fn = self._match_tracking
         set_params = self._set_params
@@ -885,8 +954,16 @@ class FusionART(BaseART):
 
         best_idx = 0
         best_t = -np.inf
+        category_choice_value = (
+            self._category_choice_value_idx_noskip
+            if not skip
+            else None
+        )
         for c_ in range(n_categories):
-            t = self._category_choice_value_idx(x, c_, skip, i_parts=x_parts)
+            if category_choice_value is not None:
+                t = category_choice_value(x, c_, i_parts=x_parts)
+            else:
+                t = self._category_choice_value_idx(x, c_, skip, i_parts=x_parts)
             if t > best_t:
                 best_t = t
                 best_idx = c_

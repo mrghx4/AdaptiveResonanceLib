@@ -238,3 +238,23 @@ def test_map_chain_cache_reused_and_invalidated(deep_artmap_model):
     chain3 = deep_artmap_model._get_map_chain_arrays(0)
     assert chain3 is not None
     assert chain3 is not chain1
+
+
+def test_get_map_chain_arrays_reuses_cached_layer_signatures(monkeypatch, deep_artmap_model):
+    X = [np.random.rand(12, 5), np.random.rand(12, 5)]
+    X_prep, _ = deep_artmap_model.prepare_data(X)
+    deep_artmap_model.fit(X_prep, max_iter=1)
+
+    calls = {"n": 0}
+    original_map_signature = deep_artmap_model._map_signature
+
+    def _count_signature(layer):
+        calls["n"] += 1
+        return original_map_signature(layer)
+
+    monkeypatch.setattr(deep_artmap_model, "_map_signature", _count_signature)
+    deep_artmap_model._invalidate_layer_map_cache()
+    chain = deep_artmap_model._get_map_chain_arrays(0)
+
+    assert chain is not None
+    assert calls["n"] == len(deep_artmap_model.layers[:1])

@@ -248,21 +248,22 @@ class DeepARTMAP(BaseEstimator, ClassifierMixin, ClusterMixin):
         return map_arr
 
     def _get_map_chain_arrays(self, start_level: int) -> Optional[list[np.ndarray]]:
-        chain_sigs: list[tuple[int, int, int, int]] = []
-        chain_arrays: list[np.ndarray] = []
+        chain_entries: list[tuple[tuple[int, int, int, int], np.ndarray]] = []
         for i in range(start_level, -1, -1):
-            sig = self._map_signature(self.layers[i])
             map_arr = self._get_layer_map_array(i)
             if map_arr is None:
                 return None
-            chain_sigs.append(sig)
-            chain_arrays.append(map_arr)
+            cached_entry = self._layer_map_cache.get(i)
+            if cached_entry is None:
+                return None
+            chain_entries.append(cached_entry)
 
-        sigs_key = tuple(chain_sigs)
+        sigs_key = tuple(entry[0] for entry in chain_entries)
         cached = self._map_chain_cache.get(start_level)
         if cached is not None and cached[0] == sigs_key:
             return cached[1]
 
+        chain_arrays = [entry[1] for entry in chain_entries]
         self._map_chain_cache[start_level] = (sigs_key, chain_arrays)
         return chain_arrays
 
