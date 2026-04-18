@@ -69,7 +69,7 @@ Status meanings:
 
 ## Current Validation State
 
-- Full Python suite baseline: `457 passed, 1 skipped, 23 warnings`
+- Full Python suite baseline: `482 passed, 1 skipped, 23 warnings`
 - Warning profile remains limited to the known `ART2` warnings
 - Dedicated parity/smoke coverage exists for the current C++ backend families
 - Benchmark scripts are present for backend runtime, fusion, and hierarchical mapping

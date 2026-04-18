@@ -1,9 +1,20 @@
 """General utilities used throughout ARTLib."""
 from functools import cmp_to_key
 import numpy as np
-from numba import njit
 from typing import Tuple, Optional, Mapping, Sequence, Union, Any
 from numpy.typing import ArrayLike, NDArray
+
+try:
+    from numba import njit
+except ImportError:  # pragma: no cover - optional acceleration dependency
+    def njit(*args, **kwargs):
+        if args and callable(args[0]) and len(args) == 1 and not kwargs:
+            return args[0]
+
+        def _decorator(func):
+            return func
+
+        return _decorator
 
 try:
     from artlib.optimized.backends.cpp.fracsort import fracsort as _fracsort

@@ -37,19 +37,17 @@ class ARTMAPFactory:
             b = "cpp"
 
         if b in ("c++", "cpp"):
-            accelerated_a = accelerate_base_art_module(module_a)
+            accelerated_a, reason_a = accelerate_base_art_module(module_a, return_reason=True)
             if accelerated_a is None:
                 warnings.warn(
-                    f"No c++ acceleration mapping for module_a '{type(module_a).__name__}'. "
-                    "Using python module_a implementation.",
+                    reason_a,
                     RuntimeWarning,
                 )
                 accelerated_a = module_a
-            accelerated_b = accelerate_base_art_module(module_b)
+            accelerated_b, reason_b = accelerate_base_art_module(module_b, return_reason=True)
             if accelerated_b is None:
                 warnings.warn(
-                    f"No c++ acceleration mapping for module_b '{type(module_b).__name__}'. "
-                    "Using python module_b implementation.",
+                    reason_b,
                     RuntimeWarning,
                 )
                 accelerated_b = module_b

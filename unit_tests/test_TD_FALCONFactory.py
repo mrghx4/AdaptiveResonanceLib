@@ -105,5 +105,14 @@ def test_factory_unknown_backend_warns_and_defaults_to_cpp_dispatch():
             gamma_values=_gamma(),
             channel_dims=_dims(),
             backend="invalid",
-        )
+    )
     assert all(isinstance(m, CppFuzzyART) for m in model.fusion_art.modules)
+
+
+def test_factory_requires_channel_dims():
+    with pytest.raises(TypeError, match="channel_dims must be provided explicitly"):
+        TDFALCONFactory(
+            state_art=FuzzyART(rho=0.5, alpha=0.01, beta=1.0),
+            action_art=FuzzyART(rho=0.7, alpha=0.01, beta=1.0),
+            reward_art=FuzzyART(rho=0.9, alpha=0.01, beta=1.0),
+        )

@@ -15,8 +15,8 @@ from typing import Optional, Callable, Literal, Tuple, Dict, List, Union
 import warnings
 import numpy as np
 from numpy.typing import NDArray
-from numba import njit
 import operator
+from artlib.common.utils import njit
 
 
 @njit

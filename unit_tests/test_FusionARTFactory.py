@@ -101,5 +101,21 @@ def test_factory_unknown_backend_warns_and_defaults_to_cpp_dispatch():
             gamma_values=_gamma(),
             channel_dims=_dims(),
             backend="invalid",
-        )
+    )
     assert all(isinstance(m, CppFuzzyART) for m in model.modules)
+
+
+def test_factory_cpp_keeps_prepared_python_module_with_warning():
+    prepared = FuzzyART(rho=0.5, alpha=0.01, beta=1.0)
+    prepared.prepare_data(np.array([[0.1, 0.2], [0.3, 0.4]]))
+
+    with pytest.warns(RuntimeWarning, match="prepared data bounds"):
+        model = FusionARTFactory(
+            modules=[prepared, FuzzyART(rho=0.7, alpha=0.01, beta=1.0)],
+            gamma_values=_gamma(),
+            channel_dims=_dims(),
+            backend="c++",
+        )
+
+    assert model.modules[0] is prepared
+    assert isinstance(model.modules[1], CppFuzzyART)

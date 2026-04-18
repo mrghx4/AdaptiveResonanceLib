@@ -36,22 +36,20 @@ class BARTMAPFactory:
             b = "cpp"
 
         if b in ("c++", "cpp"):
-            unsupported = []
-            a_acc = accelerate_base_art_module(module_a)
-            b_acc = accelerate_base_art_module(module_b)
+            reasons = []
+            a_acc, reason_a = accelerate_base_art_module(module_a, return_reason=True)
+            b_acc, reason_b = accelerate_base_art_module(module_b, return_reason=True)
 
             if a_acc is None:
-                unsupported.append(type(module_a).__name__)
+                reasons.append(reason_a)
                 a_acc = module_a
             if b_acc is None:
-                unsupported.append(type(module_b).__name__)
+                reasons.append(reason_b)
                 b_acc = module_b
 
-            if unsupported:
-                names = ", ".join(sorted(set(unsupported)))
+            if reasons:
                 warnings.warn(
-                    f"No c++ acceleration mapping for module types: {names}. "
-                    "Using python module implementation(s) for those modules.",
+                    " ".join(sorted(set(reasons))),
                     RuntimeWarning,
                 )
 

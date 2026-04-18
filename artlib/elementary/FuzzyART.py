@@ -5,7 +5,6 @@
 # Neural Networks, 4, 759 – 771. doi:10.1016/0893-6080(91)90056-B.
 
 import numpy as np
-from numba import njit
 from typing import Optional, Iterable, List, Tuple, Dict
 from matplotlib.axes import Axes
 from artlib.common.BaseART import BaseART
@@ -15,6 +14,7 @@ from artlib.common.utils import (
     l1norm,
     fuzzy_and,
     de_complement_code,
+    njit,
 )
 
 

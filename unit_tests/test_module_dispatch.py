@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from artlib.elementary.ART1 import ART1
 from artlib.elementary.ART2 import ART2A
@@ -52,3 +53,24 @@ def test_accelerate_base_art_class_supported_types():
         acc_cls = accelerate_base_art_class(c)
         assert acc_cls is not None
         assert ".cpp." in acc_cls.__module__
+
+
+def test_accelerate_base_art_module_refuses_prepared_module_state():
+    module = FuzzyART(rho=0.8, alpha=1e-10, beta=1.0)
+    module.prepare_data(np.array([[0.1, 0.9], [0.2, 0.8]]))
+
+    acc, reason = accelerate_base_art_module(module, return_reason=True)
+
+    assert acc is None
+    assert "prepared data bounds" in reason
+
+
+def test_accelerate_base_art_module_refuses_fitted_module_state():
+    module = FuzzyART(rho=0.8, alpha=1e-10, beta=1.0)
+    X = module.prepare_data(np.array([[0.1, 0.9], [0.2, 0.8]]))
+    module.fit(X)
+
+    acc, reason = accelerate_base_art_module(module, return_reason=True)
+
+    assert acc is None
+    assert "fitted state" in reason

@@ -1,11 +1,16 @@
 from artlib.optimized.FuzzyARTMAPFactory import FuzzyARTMAPFactory
 import numpy as np
 import os
+from pathlib import Path
 from sklearn.datasets import fetch_openml
 from time import perf_counter
 
 MNIST_TRAIN_SAMPLES = int(os.getenv("ART_FACTORY_TRAIN_SAMPLES", "2000"))
 MNIST_TEST_SAMPLES = int(os.getenv("ART_FACTORY_TEST_SAMPLES", "1000"))
+MNIST_DATA_HOME = os.getenv(
+    "SCIKIT_LEARN_DATA",
+    str(Path(__file__).resolve().parents[1] / ".sklearn_data"),
+)
 
 def _load_mnist_numpy():
     """
@@ -16,7 +21,7 @@ def _load_mnist_numpy():
         X_test  (10000, 784) float32 in [0,1]
         y_test  (10000,) int
     """
-    mnist = fetch_openml("mnist_784", version=1, as_frame=False)
+    mnist = fetch_openml("mnist_784", version=1, as_frame=False, data_home=MNIST_DATA_HOME)
     X_all = mnist["data"].astype(np.float32) / 255.0
     y_all = mnist["target"].astype(int)
 

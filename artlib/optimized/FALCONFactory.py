@@ -15,7 +15,7 @@ class FALCONFactory:
         action_art,
         reward_art,
         gamma_values=np.array([0.33, 0.33, 0.34]),
-        channel_dims=list[int],
+        channel_dims=None,
         *,
         backend: str = "c++",
         device: str = "cpu",
@@ -28,6 +28,8 @@ class FALCONFactory:
         modules = [state_art, action_art, reward_art]
         if not all(isinstance(m, BaseART) for m in modules):
             raise TypeError("state_art, action_art, and reward_art must be BaseART instances")
+        if channel_dims is None:
+            raise TypeError("channel_dims must be provided explicitly")
 
         b = backend.lower()
 
@@ -41,20 +43,18 @@ class FALCONFactory:
 
         if b in ("c++", "cpp"):
             accelerated = []
-            unsupported = []
+            reasons = []
             for m in modules:
-                m_acc = accelerate_base_art_module(m)
+                m_acc, reason = accelerate_base_art_module(m, return_reason=True)
                 if m_acc is None:
-                    unsupported.append(type(m).__name__)
+                    reasons.append(reason)
                     accelerated.append(m)
                 else:
                     accelerated.append(m_acc)
 
-            if unsupported:
-                names = ", ".join(sorted(set(unsupported)))
+            if reasons:
                 warnings.warn(
-                    f"No c++ acceleration mapping for module types: {names}. "
-                    "Using python module implementation(s) for those channels.",
+                    " ".join(sorted(set(reasons))),
                     RuntimeWarning,
                 )
 
@@ -102,7 +102,7 @@ class TDFALCONFactory:
         action_art,
         reward_art,
         gamma_values=np.array([0.33, 0.33, 0.34]),
-        channel_dims=list[int],
+        channel_dims=None,
         td_alpha: float = 1.0,
         td_lambda: float = 1.0,
         *,
@@ -117,6 +117,8 @@ class TDFALCONFactory:
         modules = [state_art, action_art, reward_art]
         if not all(isinstance(m, BaseART) for m in modules):
             raise TypeError("state_art, action_art, and reward_art must be BaseART instances")
+        if channel_dims is None:
+            raise TypeError("channel_dims must be provided explicitly")
 
         b = backend.lower()
 
@@ -130,20 +132,18 @@ class TDFALCONFactory:
 
         if b in ("c++", "cpp"):
             accelerated = []
-            unsupported = []
+            reasons = []
             for m in modules:
-                m_acc = accelerate_base_art_module(m)
+                m_acc, reason = accelerate_base_art_module(m, return_reason=True)
                 if m_acc is None:
-                    unsupported.append(type(m).__name__)
+                    reasons.append(reason)
                     accelerated.append(m)
                 else:
                     accelerated.append(m_acc)
 
-            if unsupported:
-                names = ", ".join(sorted(set(unsupported)))
+            if reasons:
                 warnings.warn(
-                    f"No c++ acceleration mapping for module types: {names}. "
-                    "Using python module implementation(s) for those channels.",
+                    " ".join(sorted(set(reasons))),
                     RuntimeWarning,
                 )
 

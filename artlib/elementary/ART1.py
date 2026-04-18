@@ -9,8 +9,7 @@
 import numpy as np
 from typing import Optional, List, Tuple, Dict
 from artlib.common.BaseART import BaseART
-from numba import njit
-from artlib.common.utils import complement_code, de_complement_code
+from artlib.common.utils import complement_code, de_complement_code, njit
 
 
 @njit

@@ -165,3 +165,30 @@ def test_utils_imports_without_cpp_fracsort_extension(monkeypatch) -> None:
         )
 
     importlib.reload(utils_module)
+
+
+def test_utils_imports_without_numba(monkeypatch) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "numba":
+            raise ImportError("missing numba")
+        return real_import(name, globals, locals, fromlist, level)
+
+    with monkeypatch.context() as m:
+        m.setattr(builtins, "__import__", _fake_import)
+        reloaded = importlib.reload(utils_module)
+        assert callable(reloaded.njit)
+
+        @reloaded.njit
+        def _direct(x):
+            return x + 1
+
+        @reloaded.njit(cache=True)
+        def _factory(x):
+            return x + 2
+
+        assert _direct(1) == 2
+        assert _factory(1) == 3
+
+    importlib.reload(utils_module)

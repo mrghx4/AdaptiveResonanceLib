@@ -37,11 +37,10 @@ class TopoARTFactory:
             b = "cpp"
 
         if b in ("c++", "cpp"):
-            accelerated = accelerate_base_art_module(base_module)
+            accelerated, reason = accelerate_base_art_module(base_module, return_reason=True)
             if accelerated is None:
                 warnings.warn(
-                    f"No c++ acceleration mapping for base_module '{type(base_module).__name__}'. "
-                    "Using python base module implementation.",
+                    reason,
                     RuntimeWarning,
                 )
                 accelerated = base_module

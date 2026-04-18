@@ -59,7 +59,7 @@ def test_factory_torch_falls_back_to_cpp_dispatch_with_warning():
 def test_factory_unsupported_module_a_keeps_python_impl_with_warning():
     d = DummyART(params={"rho": 0.5})
     model_b = FuzzyART(rho=0.6, alpha=1e-10, beta=1.0)
-    with pytest.warns(RuntimeWarning, match=r"No c\+\+ acceleration mapping for module_a"):
+    with pytest.warns(RuntimeWarning, match=r"No c\+\+ acceleration mapping for module type 'DummyART'"):
         model = ARTMAPFactory(module_a=d, module_b=model_b, backend="c++")
     assert isinstance(model, ARTMAP)
     assert model.module_a is d

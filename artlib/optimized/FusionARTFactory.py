@@ -39,20 +39,18 @@ class FusionARTFactory:
 
         if b in ("c++", "cpp"):
             accelerated_modules = []
-            unsupported = []
+            reasons = []
             for m in modules:
-                m_acc = accelerate_base_art_module(m)
+                m_acc, reason = accelerate_base_art_module(m, return_reason=True)
                 if m_acc is None:
-                    unsupported.append(type(m).__name__)
+                    reasons.append(reason)
                     accelerated_modules.append(m)
                 else:
                     accelerated_modules.append(m_acc)
 
-            if unsupported:
-                names = ", ".join(sorted(set(unsupported)))
+            if reasons:
                 warnings.warn(
-                    f"No c++ acceleration mapping for module types: {names}. "
-                    "Using python module implementation(s) for those channels.",
+                    " ".join(sorted(set(reasons))),
                     RuntimeWarning,
                 )
 

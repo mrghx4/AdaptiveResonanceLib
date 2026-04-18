@@ -105,5 +105,33 @@ def test_factory_unknown_backend_warns_and_defaults_to_cpp_dispatch():
             gamma_values=_gamma(),
             channel_dims=_dims(),
             backend="invalid",
-        )
+    )
     assert all(isinstance(m, CppFuzzyART) for m in model.fusion_art.modules)
+
+
+def test_factory_requires_channel_dims():
+    with pytest.raises(TypeError, match="channel_dims must be provided explicitly"):
+        FALCONFactory(
+            state_art=FuzzyART(rho=0.5, alpha=0.01, beta=1.0),
+            action_art=FuzzyART(rho=0.7, alpha=0.01, beta=1.0),
+            reward_art=FuzzyART(rho=0.9, alpha=0.01, beta=1.0),
+        )
+
+
+def test_factory_cpp_keeps_prepared_python_channel_with_warning():
+    prepared = FuzzyART(rho=0.5, alpha=0.01, beta=1.0)
+    prepared.prepare_data(np.array([[0.1, 0.2], [0.3, 0.4]]))
+
+    with pytest.warns(RuntimeWarning, match="prepared data bounds"):
+        model = FALCONFactory(
+            state_art=prepared,
+            action_art=FuzzyART(rho=0.7, alpha=0.01, beta=1.0),
+            reward_art=FuzzyART(rho=0.9, alpha=0.01, beta=1.0),
+            gamma_values=_gamma(),
+            channel_dims=_dims(),
+            backend="c++",
+        )
+
+    assert model.fusion_art.modules[0] is prepared
+    assert isinstance(model.fusion_art.modules[1], CppFuzzyART)
+    assert isinstance(model.fusion_art.modules[2], CppFuzzyART)
