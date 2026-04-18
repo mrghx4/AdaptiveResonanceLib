@@ -11,6 +11,23 @@ Status meanings:
 - `Python only`: no dedicated accelerated backend is currently implemented.
 - `Torch`: dedicated torch backend exists.
 
+## Backend Conversion Contract
+
+Current factory/dispatch behavior is intentionally conservative:
+
+- Factories accelerate fresh Python ART modules into supported C++ backends.
+- Prepared or fitted Python modules are intentionally kept as Python instances.
+- The current backend layer does **not** implement general Python-to-C++ state
+  transfer for live models.
+
+In practice, that means:
+
+- use factories when constructing new accelerated models
+- do not assume an existing prepared/fitted Python model can be upgraded in
+  place to an equivalent C++ backend instance
+- if full state transfer is needed later, it should be implemented explicitly
+  and validated family-by-family
+
 ## Elementary Models
 
 | Family | Python | C++ | Torch | Notes |
@@ -73,6 +90,8 @@ Status meanings:
 - Warning profile remains limited to the known `ART2` warnings
 - Dedicated parity/smoke coverage exists for the current C++ backend families
 - Benchmark scripts are present for backend runtime, fusion, and hierarchical mapping
+- Canonical local validation command:
+  `.venv/bin/python -m pytest -q`
 - Factory MNIST backend-comparison tests now default to a smaller routine slice.
   Use `ART_FACTORY_TRAIN_SAMPLES` and `ART_FACTORY_TEST_SAMPLES` to opt into larger
   benchmark-style runs when you want full-MNIST comparisons explicitly.

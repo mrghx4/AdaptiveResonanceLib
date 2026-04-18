@@ -30,6 +30,8 @@ Default output:
 dist/portable-artlib/
 ```
 
+This output is a generated artifact and should stay untracked in Git.
+
 The bundle contains:
 
 - `artlib/`
@@ -54,6 +56,8 @@ Default output:
 dist/portable-artlib.zip
 ```
 
+This zip is also a generated artifact and should not be committed.
+
 ## Smoke-test the bundle locally
 
 This simulates a portable runtime where:
@@ -71,6 +75,20 @@ Or test an existing bundle:
 
 ```bash
 .venv/bin/python scripts/test_portable_imports.py --bundle-dir dist/portable-artlib
+```
+
+Recommended full local portable validation:
+
+```bash
+bash scripts/build_portable_bundle.sh
+bash scripts/package_portable_bundle.sh
+.venv/bin/python scripts/validate_portable_bundle.py --bundle-dir dist/portable-artlib
+```
+
+Canonical routine repo validation remains:
+
+```bash
+.venv/bin/python -m pytest -q
 ```
 
 ## Kaggle usage
