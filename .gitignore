@@ -1,16 +1,75 @@
-.idea
-__pycache__
-.venv*
-*.so
-*.DS_Store
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environments and machine-specific config
+.venv/
+.venv*/
+venv/
+env/
+.env
+.env.*
+!.env.example
+.python-version
+.mplconfig/
 .sklearn_data/
-*.egg-info/
+
+# Local agent/tool state
+.claw/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.ipynb_checkpoints/
+
+# Test, coverage, and profiling output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+pytestdebug.log
+profile_default/
+prof/
+
+# Python packaging/build output
 build/
 dist/
-.pytest_cache/
-.mplconfig/
-.coverage
-htmlcov/
-.ipynb_checkpoints/
-.ruff_cache/
-.mypy_cache/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+wheelhouse/
+
+# Native extension and C/C++ build output
+*.so
+*.pyd
+*.dll
+*.dylib
+*.o
+*.obj
+*.a
+*.lib
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+compile_commands.json
+
+# Documentation build output
+docs/build/
+docs/_build/
+site/
+
+# Project-generated local artifacts
+artlib_portable/
+portable-artlib/
