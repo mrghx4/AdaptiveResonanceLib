@@ -1,0 +1,65 @@
+name: C++ Backend Hardening
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  python-cpp-parity:
+    name: Python/C++ parity gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install pybind11 pytest numpy scipy scikit-learn matplotlib numba torch pandas
+          python -m pip install -e .
+
+      - name: Run C++ parity gate
+        run: |
+          SCIKIT_LEARN_DATA="$GITHUB_WORKSPACE/.sklearn_data" bash scripts/run_cpp_parity_gate.sh
+
+  native-cpp:
+    name: Native C++ tests and sanitizers
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++
+
+      - name: Run native C++ tests
+        run: bash scripts/run_cpp_native_tests.sh
+
+      - name: Run bounded C++ fuzz smoke tests
+        run: bash scripts/run_cpp_fuzz_smoke.sh
+
+      - name: Run ASan/UBSan C++ tests
+        run: bash scripts/run_cpp_sanitizers.sh
+
+  static-analysis:
+    name: C++ static analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install analysis tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang-tidy cppcheck
+
+      - name: Run C++ static analysis
+        run: bash scripts/run_cpp_static_analysis.sh

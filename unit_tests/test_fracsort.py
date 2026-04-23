@@ -1,6 +1,7 @@
 import importlib
 import builtins
 import numpy as np
+import pytest
 
 import artlib.common.utils as utils_module
 from artlib.common.utils import fracsort, fracargmax
@@ -103,6 +104,37 @@ def test_fracargmax_matches_numpy_with_tiebreaks() -> None:
     # The key above uses -i so larger key corresponds to lower index.
 
     assert int(idx_cpp) == int(best)
+
+
+def test_fracsort_rejects_malformed_inputs_without_crashing() -> None:
+    with pytest.raises((RuntimeError, ValueError)):
+        fracsort(
+            np.array([[1, 2]], dtype=np.uint32),
+            np.array([[2, 3]], dtype=np.uint32),
+        )
+
+    with pytest.raises((RuntimeError, ValueError)):
+        fracsort(
+            np.array([1, 2], dtype=np.uint32),
+            np.array([2], dtype=np.uint32),
+        )
+
+    with pytest.raises((RuntimeError, ValueError)):
+        fracsort(
+            np.array([1, 2], dtype=np.uint32),
+            np.array([2, 0], dtype=np.uint32),
+        )
+
+
+def test_fracargmax_rejects_empty_and_zero_denominator_inputs() -> None:
+    with pytest.raises((RuntimeError, ValueError)):
+        fracargmax(np.array([], dtype=np.uint32), np.array([], dtype=np.uint32))
+
+    with pytest.raises((RuntimeError, ValueError)):
+        fracargmax(
+            np.array([1, 2], dtype=np.uint32),
+            np.array([2, 0], dtype=np.uint32),
+        )
 
 
 def test_fracsort_python_fallback_matches_reference(monkeypatch) -> None:

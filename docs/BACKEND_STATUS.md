@@ -2,6 +2,9 @@
 
 This document tracks current backend coverage across the ART codebase.
 
+For the C++ backend PR-readiness matrix, native hardening gates, and acceptance
+checklist, see `docs/CPP_BACKEND_HARDENING.md`.
+
 Status meanings:
 
 - `Dedicated C++ backend`: model has a specific implementation under
@@ -86,12 +89,18 @@ In practice, that means:
 
 ## Current Validation State
 
-- Full Python suite baseline: `482 passed, 1 skipped, 23 warnings`
+- Full Python suite baseline: `492 passed, 1 skipped, 23 warnings`
 - Warning profile remains limited to the known `ART2` warnings
 - Dedicated parity/smoke coverage exists for the current C++ backend families
 - Benchmark scripts are present for backend runtime, fusion, and hierarchical mapping
 - Canonical local validation command:
-  `.venv/bin/python -m pytest -q`
+  `SCIKIT_LEARN_DATA="$PWD/.sklearn_data" .venv/bin/python -m pytest -q`
+- Canonical C++ parity and hardening commands:
+  `bash scripts/run_cpp_parity_gate.sh`,
+  `bash scripts/run_cpp_native_tests.sh`,
+  `bash scripts/run_cpp_sanitizers.sh`,
+  `bash scripts/run_cpp_static_analysis.sh`,
+  `bash scripts/run_cpp_fuzz_smoke.sh`
 - Factory MNIST backend-comparison tests now default to a smaller routine slice.
   Use `ART_FACTORY_TRAIN_SAMPLES` and `ART_FACTORY_TEST_SAMPLES` to opt into larger
   benchmark-style runs when you want full-MNIST comparisons explicitly.

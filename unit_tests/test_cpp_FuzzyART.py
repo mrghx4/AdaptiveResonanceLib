@@ -57,3 +57,20 @@ def test_predict_rejects_inconsistent_weight_dimensions():
 
     with pytest.raises(ValueError):
         PredictFuzzyART(X, rho=0.8, alpha=1e-10, beta=1.0, weights=bad_weights)
+
+
+def test_predict_rejects_wrong_rank_and_malformed_weights_without_crashing():
+    X = np.array([0.2, 0.8, 0.8, 0.2], dtype=np.float64)
+    weights = [np.array([0.1, 0.9, 0.9, 0.1], dtype=np.float64)]
+
+    with pytest.raises((ValueError, RuntimeError)):
+        PredictFuzzyART(X, rho=0.8, alpha=1e-10, beta=1.0, weights=weights)
+
+    with pytest.raises((ValueError, RuntimeError)):
+        PredictFuzzyART(
+            X.reshape(1, -1),
+            rho=0.8,
+            alpha=1e-10,
+            beta=1.0,
+            weights=[np.array([[0.1, 0.9], [0.9, 0.1]], dtype=np.float64)],
+        )

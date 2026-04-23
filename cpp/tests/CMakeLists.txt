@@ -1,233 +1,33 @@
-add_executable(backend_interface_smoke
-    test_backend_interface_smoke.cpp
-)
+function(add_artlib_cpp_test target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE artlib_cpp_core)
+    artlib_cpp_apply_hardening(${target})
+    add_test(NAME ${target} COMMAND ${target})
+endfunction()
 
-target_link_libraries(backend_interface_smoke
-    PRIVATE artlib_cpp_core
-)
+add_artlib_cpp_test(backend_interface_smoke test_backend_interface_smoke.cpp)
+add_artlib_cpp_test(fuzzy_art_core_smoke test_fuzzy_art_core_smoke.cpp)
+add_artlib_cpp_test(art1_core_smoke test_art1_core_smoke.cpp)
+add_artlib_cpp_test(art2_core_smoke test_art2_core_smoke.cpp)
+add_artlib_cpp_test(art1map_core_smoke test_art1map_core_smoke.cpp)
+add_artlib_cpp_test(binary_fuzzy_art_core_smoke test_binary_fuzzy_art_core_smoke.cpp)
+add_artlib_cpp_test(binary_fuzzy_artmap_core_smoke test_binary_fuzzy_artmap_core_smoke.cpp)
+add_artlib_cpp_test(fuzzy_artmap_core_smoke test_fuzzy_artmap_core_smoke.cpp)
+add_artlib_cpp_test(gaussian_artmap_core_smoke test_gaussian_artmap_core_smoke.cpp)
+add_artlib_cpp_test(gaussian_art_core_smoke test_gaussian_art_core_smoke.cpp)
+add_artlib_cpp_test(hypersphere_art_core_smoke test_hypersphere_art_core_smoke.cpp)
+add_artlib_cpp_test(ellipsoid_art_core_smoke test_ellipsoid_art_core_smoke.cpp)
+add_artlib_cpp_test(bayesian_art_core_smoke test_bayesian_art_core_smoke.cpp)
+add_artlib_cpp_test(bayesian_artmap_core_smoke test_bayesian_artmap_core_smoke.cpp)
+add_artlib_cpp_test(hypersphere_artmap_core_smoke test_hypersphere_artmap_core_smoke.cpp)
+add_artlib_cpp_test(quadratic_neuron_art_core_smoke test_quadratic_neuron_art_core_smoke.cpp)
+add_artlib_cpp_test(cvi_metrics_core_smoke test_cvi_metrics_core_smoke.cpp)
+add_artlib_cpp_test(bartmap_metrics_core_smoke test_bartmap_metrics_core_smoke.cpp)
+add_artlib_cpp_test(fusion_core_smoke test_fusion_core_smoke.cpp)
+add_artlib_cpp_test(simple_artmap_core_smoke test_simple_artmap_core_smoke.cpp)
+add_artlib_cpp_test(fraction_sort_core_smoke test_fraction_sort_core_smoke.cpp)
 
-add_test(
-    NAME backend_interface_smoke
-    COMMAND backend_interface_smoke
-)
-
-add_executable(fuzzy_art_core_smoke
-    test_fuzzy_art_core_smoke.cpp
-)
-
-target_link_libraries(fuzzy_art_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME fuzzy_art_core_smoke
-    COMMAND fuzzy_art_core_smoke
-)
-
-add_executable(art1_core_smoke
-    test_art1_core_smoke.cpp
-)
-
-target_link_libraries(art1_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME art1_core_smoke
-    COMMAND art1_core_smoke
-)
-
-add_executable(art2_core_smoke
-    test_art2_core_smoke.cpp
-)
-
-target_link_libraries(art2_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME art2_core_smoke
-    COMMAND art2_core_smoke
-)
-
-add_executable(art1map_core_smoke
-    test_art1map_core_smoke.cpp
-)
-
-target_link_libraries(art1map_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME art1map_core_smoke
-    COMMAND art1map_core_smoke
-)
-
-add_executable(binary_fuzzy_art_core_smoke
-    test_binary_fuzzy_art_core_smoke.cpp
-)
-
-target_link_libraries(binary_fuzzy_art_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME binary_fuzzy_art_core_smoke
-    COMMAND binary_fuzzy_art_core_smoke
-)
-
-add_executable(binary_fuzzy_artmap_core_smoke
-    test_binary_fuzzy_artmap_core_smoke.cpp
-)
-
-target_link_libraries(binary_fuzzy_artmap_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME binary_fuzzy_artmap_core_smoke
-    COMMAND binary_fuzzy_artmap_core_smoke
-)
-
-add_executable(fuzzy_artmap_core_smoke
-    test_fuzzy_artmap_core_smoke.cpp
-)
-
-target_link_libraries(fuzzy_artmap_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME fuzzy_artmap_core_smoke
-    COMMAND fuzzy_artmap_core_smoke
-)
-
-add_executable(gaussian_artmap_core_smoke
-    test_gaussian_artmap_core_smoke.cpp
-)
-
-target_link_libraries(gaussian_artmap_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME gaussian_artmap_core_smoke
-    COMMAND gaussian_artmap_core_smoke
-)
-
-add_executable(gaussian_art_core_smoke
-    test_gaussian_art_core_smoke.cpp
-)
-
-target_link_libraries(gaussian_art_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME gaussian_art_core_smoke
-    COMMAND gaussian_art_core_smoke
-)
-
-add_executable(hypersphere_art_core_smoke
-    test_hypersphere_art_core_smoke.cpp
-)
-
-target_link_libraries(hypersphere_art_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME hypersphere_art_core_smoke
-    COMMAND hypersphere_art_core_smoke
-)
-
-add_executable(ellipsoid_art_core_smoke
-    test_ellipsoid_art_core_smoke.cpp
-)
-
-target_link_libraries(ellipsoid_art_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME ellipsoid_art_core_smoke
-    COMMAND ellipsoid_art_core_smoke
-)
-
-add_executable(bayesian_art_core_smoke
-    test_bayesian_art_core_smoke.cpp
-)
-
-target_link_libraries(bayesian_art_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME bayesian_art_core_smoke
-    COMMAND bayesian_art_core_smoke
-)
-
-add_executable(bayesian_artmap_core_smoke
-    test_bayesian_artmap_core_smoke.cpp
-)
-
-target_link_libraries(bayesian_artmap_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME bayesian_artmap_core_smoke
-    COMMAND bayesian_artmap_core_smoke
-)
-
-add_executable(hypersphere_artmap_core_smoke
-    test_hypersphere_artmap_core_smoke.cpp
-)
-
-target_link_libraries(hypersphere_artmap_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME hypersphere_artmap_core_smoke
-    COMMAND hypersphere_artmap_core_smoke
-)
-
-add_executable(quadratic_neuron_art_core_smoke
-    test_quadratic_neuron_art_core_smoke.cpp
-)
-
-target_link_libraries(quadratic_neuron_art_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME quadratic_neuron_art_core_smoke
-    COMMAND quadratic_neuron_art_core_smoke
-)
-
-add_executable(cvi_metrics_core_smoke
-    test_cvi_metrics_core_smoke.cpp
-)
-
-target_link_libraries(cvi_metrics_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME cvi_metrics_core_smoke
-    COMMAND cvi_metrics_core_smoke
-)
-
-add_executable(bartmap_metrics_core_smoke
-    test_bartmap_metrics_core_smoke.cpp
-)
-
-target_link_libraries(bartmap_metrics_core_smoke
-    PRIVATE artlib_cpp_core
-)
-
-add_test(
-    NAME bartmap_metrics_core_smoke
-    COMMAND bartmap_metrics_core_smoke
-)
+if(ARTLIB_CPP_BUILD_FUZZ)
+    add_artlib_cpp_test(fusion_core_fuzz_smoke fuzz_fusion_core_smoke.cpp)
+    add_artlib_cpp_test(fraction_sort_core_fuzz_smoke fuzz_fraction_sort_core_smoke.cpp)
+endif()
