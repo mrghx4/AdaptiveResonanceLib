@@ -6,6 +6,9 @@ on:
   push:
     branches: [ main, develop ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   python-cpp-parity:
     name: Python/C++ parity gate
@@ -59,7 +62,8 @@ jobs:
       - name: Install analysis tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake clang-tidy cppcheck
+          sudo apt-get install -y cmake clang-tidy cppcheck python3-dev python3-pip
+          python3 -m pip install --user --upgrade pybind11
 
       - name: Run C++ static analysis
         run: bash scripts/run_cpp_static_analysis.sh

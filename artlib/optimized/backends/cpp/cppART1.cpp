@@ -83,9 +83,8 @@ std::vector<py::array_t<double>> to_py_weights(
 
 class cppART1 {
 public:
-    cppART1(double rho, double L, py::object weights = py::none()) : params_{rho, L} {
-        initial_weights_ = parse_weights(weights);
-    }
+    cppART1(double rho, double L, py::object weights = py::none())
+        : params_{rho, L}, initial_weights_(parse_weights(weights)) {}
 
     std::tuple<py::array_t<int>, std::vector<py::array_t<double>>> fit(const MatrixArray& x) {
         artlib_cpp::ART1Core core(params_);

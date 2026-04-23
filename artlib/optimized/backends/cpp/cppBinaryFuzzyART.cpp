@@ -96,9 +96,8 @@ std::vector<py::array_t<int>> to_py_weights(
 
 class cppBinaryFuzzyART {
 public:
-    cppBinaryFuzzyART(double rho, py::object weights = py::none()) : rho_(rho) {
-        initial_weights_ = parse_weights(weights);
-    }
+    cppBinaryFuzzyART(double rho, py::object weights = py::none())
+        : rho_(rho), initial_weights_(parse_weights(weights)) {}
 
     std::tuple<py::array_t<int>, std::vector<py::array_t<int>>> fit(py::object X_obj) {
         auto x = require_int_or_bool_and_cast_u8(X_obj, "X");

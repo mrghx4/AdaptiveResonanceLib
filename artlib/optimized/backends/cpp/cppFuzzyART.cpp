@@ -85,9 +85,7 @@ std::vector<py::array_t<double>> to_py_weights(
 class cppFuzzyART {
 public:
     cppFuzzyART(double rho, double alpha, double beta, py::object weights = py::none())
-        : params_{rho, alpha, beta} {
-        initial_weights_ = parse_weights(weights);
-    }
+        : params_{rho, alpha, beta}, initial_weights_(parse_weights(weights)) {}
 
     std::tuple<py::array_t<int>, std::vector<py::array_t<double>>> fit(const MatrixArray& x) {
         artlib_cpp::FuzzyARTCore core(params_);
