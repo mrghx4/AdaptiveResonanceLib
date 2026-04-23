@@ -10,6 +10,24 @@ namespace artlib_cpp {
 
 namespace {
 constexpr double kPi2 = 2.0 * 3.141592653589793238462643383279502884;
+
+std::size_t int_size(int value) {
+    return static_cast<std::size_t>(value);
+}
+
+std::size_t square_size(int value) {
+    const std::size_t n = int_size(value);
+    return n * n;
+}
+
+std::size_t gaussian_weight_size(int dim) {
+    const std::size_t n = int_size(dim);
+    return n + n * n + 1;
+}
+
+std::size_t matrix_index(int row, int col, int cols) {
+    return int_size(row) * int_size(cols) + int_size(col);
+}
 }
 
 BayesianARTCore::BayesianARTCore(BayesianARTParams params)
@@ -29,7 +47,7 @@ void BayesianARTCore::set_weights(const std::vector<std::vector<double>>& weight
 
     const double f = static_cast<double>(expected_len - 1);
     const int inferred_dim = static_cast<int>(std::round((std::sqrt(1.0 + 4.0 * f) - 1.0) / 2.0));
-    if (inferred_dim <= 0 || static_cast<std::size_t>(inferred_dim + inferred_dim * inferred_dim + 1) != expected_len) {
+    if (inferred_dim <= 0 || gaussian_weight_size(inferred_dim) != expected_len) {
         throw std::invalid_argument("invalid weight length");
     }
 
@@ -49,7 +67,7 @@ void BayesianARTCore::fit(const double* x, std::size_t rows, std::size_t cols) {
     validate_x(x, rows, cols);
     if (dim_ == 0) dim_ = static_cast<int>(cols);
 
-    if (params_.cov_init.size() != static_cast<std::size_t>(dim_ * dim_)) {
+    if (params_.cov_init.size() != square_size(dim_)) {
         throw std::invalid_argument("cov_init shape mismatch");
     }
 
@@ -87,27 +105,27 @@ const std::vector<std::vector<double>>& BayesianARTCore::weights() const { retur
 bool BayesianARTCore::invert_and_det(const std::vector<double>& a, std::vector<double>& inv, double& det) const {
     const int n = dim_;
     // Fast SPD path: covariance matrices are expected to be symmetric positive definite.
-    std::vector<double> l(static_cast<std::size_t>(n * n), 0.0);
+    std::vector<double> l(square_size(n), 0.0);
     bool chol_ok = true;
     for (int i = 0; i < n && chol_ok; ++i) {
         for (int j = 0; j <= i; ++j) {
-            double sum = a[static_cast<std::size_t>(i * n + j)];
+            double sum = a[matrix_index(i, j, n)];
             for (int k = 0; k < j; ++k) {
-                sum -= l[static_cast<std::size_t>(i * n + k)] * l[static_cast<std::size_t>(j * n + k)];
+                sum -= l[matrix_index(i, k, n)] * l[matrix_index(j, k, n)];
             }
             if (i == j) {
                 if (sum <= 1e-15) {
                     chol_ok = false;
                     break;
                 }
-                l[static_cast<std::size_t>(i * n + j)] = std::sqrt(sum);
+                l[matrix_index(i, j, n)] = std::sqrt(sum);
             } else {
-                const double ljj = l[static_cast<std::size_t>(j * n + j)];
+                const double ljj = l[matrix_index(j, j, n)];
                 if (std::abs(ljj) <= 1e-15) {
                     chol_ok = false;
                     break;
                 }
-                l[static_cast<std::size_t>(i * n + j)] = sum / ljj;
+                l[matrix_index(i, j, n)] = sum / ljj;
             }
         }
     }
@@ -115,11 +133,11 @@ bool BayesianARTCore::invert_and_det(const std::vector<double>& a, std::vector<d
     if (chol_ok) {
         det = 1.0;
         for (int i = 0; i < n; ++i) {
-            const double d = l[static_cast<std::size_t>(i * n + i)];
+            const double d = l[matrix_index(i, i, n)];
             det *= d * d;
         }
 
-        inv.assign(static_cast<std::size_t>(n * n), 0.0);
+        inv.assign(square_size(n), 0.0);
         std::vector<double> y(static_cast<std::size_t>(n), 0.0);
         std::vector<double> x(static_cast<std::size_t>(n), 0.0);
 
@@ -127,37 +145,37 @@ bool BayesianARTCore::invert_and_det(const std::vector<double>& a, std::vector<d
             for (int i = 0; i < n; ++i) {
                 double sum = (i == col) ? 1.0 : 0.0;
                 for (int k = 0; k < i; ++k) {
-                    sum -= l[static_cast<std::size_t>(i * n + k)] * y[static_cast<std::size_t>(k)];
+                    sum -= l[matrix_index(i, k, n)] * y[static_cast<std::size_t>(k)];
                 }
-                y[static_cast<std::size_t>(i)] = sum / l[static_cast<std::size_t>(i * n + i)];
+                y[static_cast<std::size_t>(i)] = sum / l[matrix_index(i, i, n)];
             }
             for (int i = n - 1; i >= 0; --i) {
                 double sum = y[static_cast<std::size_t>(i)];
                 for (int k = i + 1; k < n; ++k) {
-                    sum -= l[static_cast<std::size_t>(k * n + i)] * x[static_cast<std::size_t>(k)];
+                    sum -= l[matrix_index(k, i, n)] * x[static_cast<std::size_t>(k)];
                 }
-                x[static_cast<std::size_t>(i)] = sum / l[static_cast<std::size_t>(i * n + i)];
+                x[static_cast<std::size_t>(i)] = sum / l[matrix_index(i, i, n)];
             }
             for (int i = 0; i < n; ++i) {
-                inv[static_cast<std::size_t>(i * n + col)] = x[static_cast<std::size_t>(i)];
+                inv[matrix_index(i, col, n)] = x[static_cast<std::size_t>(i)];
             }
         }
         return true;
     }
 
     // Fallback for non-SPD / numerically problematic inputs.
-    inv.assign(static_cast<std::size_t>(n * n), 0.0);
+    inv.assign(square_size(n), 0.0);
     std::vector<double> m = a;
-    for (int i = 0; i < n; ++i) inv[static_cast<std::size_t>(i * n + i)] = 1.0;
+    for (int i = 0; i < n; ++i) inv[matrix_index(i, i, n)] = 1.0;
 
     det = 1.0;
     int sign = 1;
 
     for (int col = 0; col < n; ++col) {
         int pivot = col;
-        double max_abs = std::abs(m[static_cast<std::size_t>(col * n + col)]);
+        double max_abs = std::abs(m[matrix_index(col, col, n)]);
         for (int r = col + 1; r < n; ++r) {
-            const double v = std::abs(m[static_cast<std::size_t>(r * n + col)]);
+            const double v = std::abs(m[matrix_index(r, col, n)]);
             if (v > max_abs) {
                 max_abs = v;
                 pivot = r;
@@ -171,27 +189,27 @@ bool BayesianARTCore::invert_and_det(const std::vector<double>& a, std::vector<d
 
         if (pivot != col) {
             for (int c = 0; c < n; ++c) {
-                std::swap(m[static_cast<std::size_t>(col * n + c)], m[static_cast<std::size_t>(pivot * n + c)]);
-                std::swap(inv[static_cast<std::size_t>(col * n + c)], inv[static_cast<std::size_t>(pivot * n + c)]);
+                std::swap(m[matrix_index(col, c, n)], m[matrix_index(pivot, c, n)]);
+                std::swap(inv[matrix_index(col, c, n)], inv[matrix_index(pivot, c, n)]);
             }
             sign = -sign;
         }
 
-        const double piv = m[static_cast<std::size_t>(col * n + col)];
+        const double piv = m[matrix_index(col, col, n)];
         det *= piv;
 
         for (int c = 0; c < n; ++c) {
-            m[static_cast<std::size_t>(col * n + c)] /= piv;
-            inv[static_cast<std::size_t>(col * n + c)] /= piv;
+            m[matrix_index(col, c, n)] /= piv;
+            inv[matrix_index(col, c, n)] /= piv;
         }
 
         for (int r = 0; r < n; ++r) {
             if (r == col) continue;
-            const double factor = m[static_cast<std::size_t>(r * n + col)];
+            const double factor = m[matrix_index(r, col, n)];
             if (factor == 0.0) continue;
             for (int c = 0; c < n; ++c) {
-                m[static_cast<std::size_t>(r * n + c)] -= factor * m[static_cast<std::size_t>(col * n + c)];
-                inv[static_cast<std::size_t>(r * n + c)] -= factor * inv[static_cast<std::size_t>(col * n + c)];
+                m[matrix_index(r, c, n)] -= factor * m[matrix_index(col, c, n)];
+                inv[matrix_index(r, c, n)] -= factor * inv[matrix_index(col, c, n)];
             }
         }
     }
@@ -206,7 +224,7 @@ double BayesianARTCore::quadratic_form(const std::vector<double>& inv_cov, const
     for (int r = 0; r < n; ++r) {
         double s = 0.0;
         for (int c = 0; c < n; ++c) {
-            s += inv_cov[static_cast<std::size_t>(r * n + c)] * dist[c];
+            s += inv_cov[matrix_index(r, c, n)] * dist[c];
         }
         tmp[static_cast<std::size_t>(r)] = s;
     }
@@ -222,7 +240,7 @@ double BayesianARTCore::category_choice(const double* sample, const std::vector<
     const double* cov = w.data() + n;
     const double count = w.back();
 
-    std::vector<double> cov_vec(cov, cov + n * n);
+    std::vector<double> cov_vec(cov, cov + square_size(n));
     std::vector<double> inv_cov;
     double det_cov = 0.0;
     if (!invert_and_det(cov_vec, inv_cov, det_cov) || det_cov <= 0.0) {
@@ -248,7 +266,7 @@ double BayesianARTCore::match_criterion(const double* sample, const std::vector<
     const std::vector<double> new_w = update_weight(sample, w);
     const int n = dim_;
     const double* cov = new_w.data() + n;
-    std::vector<double> cov_vec(cov, cov + n * n);
+    std::vector<double> cov_vec(cov, cov + square_size(n));
     std::vector<double> inv_cov;
     double det_cov = 0.0;
     if (!invert_and_det(cov_vec, inv_cov, det_cov)) return 0.0;
@@ -268,18 +286,17 @@ std::vector<double> BayesianARTCore::update_weight(const double* sample, const s
         mean_new[static_cast<std::size_t>(i)] = (1.0 - (1.0 / n_new)) * mean[i] + (1.0 / n_new) * sample[i];
     }
 
-    std::vector<double> cov_new(static_cast<std::size_t>(n * n), 0.0);
+    std::vector<double> cov_new(square_size(n), 0.0);
     for (int r = 0; r < n; ++r) {
         for (int c = 0; c < n; ++c) {
             const double outer = (sample[r] - mean_new[static_cast<std::size_t>(r)])
                                * (sample[c] - mean_new[static_cast<std::size_t>(c)]);
-            cov_new[static_cast<std::size_t>(r * n + c)] = (count / n_new) * cov[static_cast<std::size_t>(r * n + c)]
-                                                          + (1.0 / n_new) * outer;
+            cov_new[matrix_index(r, c, n)] = (count / n_new) * cov[matrix_index(r, c, n)] + (1.0 / n_new) * outer;
         }
     }
 
     std::vector<double> out;
-    out.reserve(static_cast<std::size_t>(n + n * n + 1));
+    out.reserve(gaussian_weight_size(n));
     out.insert(out.end(), mean_new.begin(), mean_new.end());
     out.insert(out.end(), cov_new.begin(), cov_new.end());
     out.push_back(n_new);
@@ -288,7 +305,7 @@ std::vector<double> BayesianARTCore::update_weight(const double* sample, const s
 
 std::vector<double> BayesianARTCore::new_weight(const double* sample) const {
     std::vector<double> out;
-    out.reserve(static_cast<std::size_t>(dim_ + dim_ * dim_ + 1));
+    out.reserve(gaussian_weight_size(dim_));
     out.insert(out.end(), sample, sample + dim_);
     out.insert(out.end(), params_.cov_init.begin(), params_.cov_init.end());
     out.push_back(1.0);

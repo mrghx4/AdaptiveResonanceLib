@@ -8,6 +8,28 @@
 
 namespace artlib_cpp {
 
+namespace {
+
+std::size_t int_size(int value) {
+    return static_cast<std::size_t>(value);
+}
+
+std::size_t square_size(int value) {
+    const std::size_t n = int_size(value);
+    return n * n;
+}
+
+std::size_t quadratic_weight_size(int dim) {
+    const std::size_t n = int_size(dim);
+    return n * n + n + 1;
+}
+
+std::size_t matrix_index(int row, int col, int cols) {
+    return int_size(row) * int_size(cols) + int_size(col);
+}
+
+}  // namespace
+
 QuadraticNeuronARTCore::QuadraticNeuronARTCore(QuadraticNeuronARTParams params)
     : params_(std::move(params)), dim_(0) {
     if (params_.rho < 0.0 || params_.rho > 1.0) {
@@ -38,7 +60,7 @@ void QuadraticNeuronARTCore::set_weights(const std::vector<std::vector<double>>&
 
     const double disc = std::sqrt(static_cast<double>(4 * expected_len - 3));
     const int inferred_dim = static_cast<int>(std::llround((disc - 1.0) / 2.0));
-    if (inferred_dim <= 0 || static_cast<std::size_t>(inferred_dim * inferred_dim + inferred_dim + 1) != expected_len) {
+    if (inferred_dim <= 0 || quadratic_weight_size(inferred_dim) != expected_len) {
         throw std::invalid_argument("invalid weight length");
     }
 
@@ -96,7 +118,7 @@ double QuadraticNeuronARTCore::category_choice(
     double* out_l2,
     std::vector<double>* out_z
 ) const {
-    const int dim2 = dim_ * dim_;
+    const std::size_t dim2 = square_size(dim_);
     const double* w_mat = w.data();
     const double* b = w.data() + dim2;
     const double s = w.back();
@@ -105,7 +127,7 @@ double QuadraticNeuronARTCore::category_choice(
     for (int r = 0; r < dim_; ++r) {
         double acc = 0.0;
         for (int c = 0; c < dim_; ++c) {
-            acc += w_mat[r * dim_ + c] * sample[c];
+            acc += w_mat[matrix_index(r, c, dim_)] * sample[c];
         }
         z[r] = acc;
     }
@@ -131,7 +153,7 @@ std::vector<double> QuadraticNeuronARTCore::update_weight(
     double l2_z_b,
     const std::vector<double>& z
 ) const {
-    const int dim2 = dim_ * dim_;
+    const std::size_t dim2 = square_size(dim_);
     const double* w_mat = w.data();
     const double* b = w.data() + dim2;
     const double s = w.back();
@@ -148,7 +170,7 @@ std::vector<double> QuadraticNeuronARTCore::update_weight(
     for (int r = 0; r < dim_; ++r) {
         const double dz = z[r] - b[r];
         for (int c = 0; c < dim_; ++c) {
-            const std::size_t idx = static_cast<std::size_t>(r * dim_ + c);
+            const std::size_t idx = matrix_index(r, c, dim_);
             out[idx] = w_mat[idx] + params_.lr_w * (-sst2 * (dz * i[c]));
         }
     }
@@ -159,8 +181,7 @@ std::vector<double> QuadraticNeuronARTCore::update_weight(
 
 std::vector<double> QuadraticNeuronARTCore::new_weight(const std::vector<double>& i) const {
     std::vector<double> out;
-    const int dim2 = dim_ * dim_;
-    out.reserve(static_cast<std::size_t>(dim2 + dim_ + 1));
+    out.reserve(quadratic_weight_size(dim_));
 
     for (int r = 0; r < dim_; ++r) {
         for (int c = 0; c < dim_; ++c) {
